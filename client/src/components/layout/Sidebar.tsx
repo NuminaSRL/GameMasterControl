@@ -55,6 +55,9 @@ export default function Sidebar() {
             <SidebarItem href="/settings" icon="fas fa-cog" active={location === "/settings"}>
               Impostazioni
             </SidebarItem>
+            <SidebarItem href="/api-test" icon="fas fa-flask" active={location === "/api-test"}>
+              Test API
+            </SidebarItem>
           </nav>
         </div>
         <div className="flex-shrink-0 flex p-4 border-t border-gray-700">

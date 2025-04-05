@@ -2,10 +2,215 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertGameSchema, insertBadgeSchema, insertRewardSchema, insertGameBadgeSchema } from "@shared/schema";
+import * as feltrinelliApi from "./feltrinelli-api";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Create HTTP server
   const httpServer = createServer(app);
+
+  // === FELTRINELLI API INTEGRATION ===
+  
+  // Verifica connessione alle API di Feltrinelli
+  app.get('/api/feltrinelli/health', async (req, res) => {
+    try {
+      const isHealthy = await feltrinelliApi.healthCheck();
+      if (isHealthy) {
+        res.json({ status: 'ok', message: 'Feltrinelli Gaming API is connected' });
+      } else {
+        res.status(503).json({ status: 'error', message: 'Feltrinelli Gaming API is not available' });
+      }
+    } catch (error) {
+      res.status(500).json({ status: 'error', message: `Error connecting to Feltrinelli API: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // Sessione di gioco
+  app.post('/api/feltrinelli/session', async (req, res) => {
+    try {
+      const { userId, gameType } = req.body;
+      
+      if (!userId || !gameType) {
+        return res.status(400).json({ message: 'userId and gameType are required' });
+      }
+      
+      if (!['books', 'authors', 'years'].includes(gameType)) {
+        return res.status(400).json({ message: 'gameType must be one of: books, authors, years' });
+      }
+      
+      const session = await feltrinelliApi.createGameSession(userId, gameType as 'books' | 'authors' | 'years');
+      res.json(session);
+    } catch (error) {
+      res.status(500).json({ message: `Error creating game session: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // Domande Quiz Libri
+  app.get('/api/feltrinelli/bookquiz/question', async (req, res) => {
+    try {
+      const difficulty = req.query.difficulty ? parseInt(req.query.difficulty as string) : 1;
+      const question = await feltrinelliApi.getBookQuizQuestion(difficulty);
+      res.json(question);
+    } catch (error) {
+      res.status(500).json({ message: `Error fetching book quiz question: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // Risposte Quiz Libri
+  app.post('/api/feltrinelli/bookquiz/answer', async (req, res) => {
+    try {
+      const { sessionId, questionId, answerOptionId, timeTaken } = req.body;
+      
+      if (!sessionId || !questionId || !answerOptionId || timeTaken === undefined) {
+        return res.status(400).json({ message: 'sessionId, questionId, answerOptionId, and timeTaken are required' });
+      }
+      
+      const result = await feltrinelliApi.submitBookQuizAnswer(sessionId, questionId, answerOptionId, timeTaken);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ message: `Error submitting book quiz answer: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // Domande Quiz Autori
+  app.get('/api/feltrinelli/authorquiz/question', async (req, res) => {
+    try {
+      const difficulty = req.query.difficulty ? parseInt(req.query.difficulty as string) : 1;
+      const question = await feltrinelliApi.getAuthorQuizQuestion(difficulty);
+      res.json(question);
+    } catch (error) {
+      res.status(500).json({ message: `Error fetching author quiz question: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // Risposte Quiz Autori
+  app.post('/api/feltrinelli/authorquiz/answer', async (req, res) => {
+    try {
+      const { sessionId, questionId, answerOptionId, timeTaken } = req.body;
+      
+      if (!sessionId || !questionId || !answerOptionId || timeTaken === undefined) {
+        return res.status(400).json({ message: 'sessionId, questionId, answerOptionId, and timeTaken are required' });
+      }
+      
+      const result = await feltrinelliApi.submitAuthorQuizAnswer(sessionId, questionId, answerOptionId, timeTaken);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ message: `Error submitting author quiz answer: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // Domande Quiz Anni
+  app.get('/api/feltrinelli/yearquiz/question', async (req, res) => {
+    try {
+      const difficulty = req.query.difficulty ? parseInt(req.query.difficulty as string) : 1;
+      const question = await feltrinelliApi.getYearQuizQuestion(difficulty);
+      res.json(question);
+    } catch (error) {
+      res.status(500).json({ message: `Error fetching year quiz question: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // Risposte Quiz Anni
+  app.post('/api/feltrinelli/yearquiz/answer', async (req, res) => {
+    try {
+      const { sessionId, questionId, answerYear, timeTaken } = req.body;
+      
+      if (!sessionId || !questionId || answerYear === undefined || timeTaken === undefined) {
+        return res.status(400).json({ message: 'sessionId, questionId, answerYear, and timeTaken are required' });
+      }
+      
+      const result = await feltrinelliApi.submitYearQuizAnswer(sessionId, questionId, answerYear, timeTaken);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ message: `Error submitting year quiz answer: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // Classifica
+  app.get('/api/feltrinelli/leaderboard', async (req, res) => {
+    try {
+      const period = (req.query.period as 'all_time' | 'monthly' | 'weekly') || 'all_time';
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      
+      const leaderboard = await feltrinelliApi.getLeaderboard(period, limit);
+      res.json(leaderboard);
+    } catch (error) {
+      res.status(500).json({ message: `Error fetching leaderboard: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // Classifica per gioco specifico
+  app.get('/api/feltrinelli/leaderboard/:gameType', async (req, res) => {
+    try {
+      const gameType = req.params.gameType as 'books' | 'authors' | 'years';
+      const period = (req.query.period as 'all_time' | 'monthly' | 'weekly') || 'all_time';
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      
+      if (!['books', 'authors', 'years'].includes(gameType)) {
+        return res.status(400).json({ message: 'gameType must be one of: books, authors, years' });
+      }
+      
+      const gameId = feltrinelliApi.getGameIdByType(gameType);
+      const leaderboard = await feltrinelliApi.getGameLeaderboard(gameId, period, limit);
+      res.json(leaderboard);
+    } catch (error) {
+      res.status(500).json({ message: `Error fetching game leaderboard: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // Invio punteggio
+  app.post('/api/feltrinelli/score', async (req, res) => {
+    try {
+      const { userId, gameType, correctAnswers, totalQuestions, sessionId } = req.body;
+      
+      if (!userId || !gameType || correctAnswers === undefined || totalQuestions === undefined || !sessionId) {
+        return res.status(400).json({ message: 'userId, gameType, correctAnswers, totalQuestions, and sessionId are required' });
+      }
+      
+      if (!['books', 'authors', 'years'].includes(gameType)) {
+        return res.status(400).json({ message: 'gameType must be one of: books, authors, years' });
+      }
+      
+      const gameId = feltrinelliApi.getGameIdByType(gameType as 'books' | 'authors' | 'years');
+      const result = await feltrinelliApi.submitScore(userId, gameId, correctAnswers, totalQuestions, sessionId);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ message: `Error submitting score: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // Premi disponibili
+  app.get('/api/feltrinelli/rewards', async (req, res) => {
+    try {
+      const gameType = req.query.gameType as 'books' | 'authors' | 'years';
+      const period = (req.query.period as 'all_time' | 'monthly' | 'weekly') || 'all_time';
+      
+      if (!gameType || !['books', 'authors', 'years'].includes(gameType)) {
+        return res.status(400).json({ message: 'gameType query parameter is required and must be one of: books, authors, years' });
+      }
+      
+      const gameId = feltrinelliApi.getGameIdByType(gameType);
+      const rewards = await feltrinelliApi.getAvailableRewards(gameId, period);
+      res.json(rewards);
+    } catch (error) {
+      res.status(500).json({ message: `Error fetching rewards: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // Premi dell'utente
+  app.get('/api/feltrinelli/rewards/user/:userId', async (req, res) => {
+    try {
+      const userId = req.params.userId;
+      
+      if (!userId) {
+        return res.status(400).json({ message: 'userId is required' });
+      }
+      
+      const rewards = await feltrinelliApi.getUserRewards(userId);
+      res.json(rewards);
+    } catch (error) {
+      res.status(500).json({ message: `Error fetching user rewards: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
 
   // === GAMES ENDPOINTS ===
   
