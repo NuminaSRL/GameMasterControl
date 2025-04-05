@@ -6,6 +6,8 @@ import {
   gameBadges, type GameBadge, type InsertGameBadge,
   stats, type Stats
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, and, or } from "drizzle-orm";
 
 // Storage interface for all operations
 export interface IStorage {
@@ -41,192 +43,74 @@ export interface IStorage {
   updateStats(statsData: Partial<Stats>): Promise<Stats>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private games: Map<number, Game>;
-  private badges: Map<number, Badge>;
-  private rewards: Map<number, Reward>;
-  private gameBadges: Map<number, GameBadge>;
-  private statsData: Stats;
-  
-  private userId: number;
-  private gameId: number;
-  private badgeId: number;
-  private rewardId: number;
-  private gameBadgeId: number;
-
-  constructor() {
-    this.users = new Map();
-    this.games = new Map();
-    this.badges = new Map();
-    this.rewards = new Map();
-    this.gameBadges = new Map();
-    
-    this.userId = 1;
-    this.gameId = 1;
-    this.badgeId = 1;
-    this.rewardId = 1;
-    this.gameBadgeId = 1;
-    
-    // Initialize with some sample stats
-    this.statsData = {
-      id: 1,
-      totalGames: 8,
-      activeGames: 6,
-      activeUsers: 354,
-      awardedBadges: 127,
-      updatedAt: new Date()
-    };
-    
-    // Initialize with sample data for demonstration
-    this.initSampleData();
-  }
-
-  // Initialize sample data
-  private initSampleData() {
-    // Sample games
-    const sampleGames: InsertGame[] = [
-      {
-        name: "Quiz Generale",
-        description: "Domande di cultura generale",
-        isActive: true,
-        timerDuration: 30,
-        questionCount: 10,
-        weeklyLeaderboard: true,
-        monthlyLeaderboard: true,
-        reward: "points_500"
-      },
-      {
-        name: "Math Challenge",
-        description: "Sfida con operazioni matematiche",
-        isActive: false,
-        timerDuration: 45,
-        questionCount: 15,
-        weeklyLeaderboard: true,
-        monthlyLeaderboard: false,
-        reward: "points_200"
-      },
-      {
-        name: "Music Trivia",
-        description: "Indovina la canzone",
-        isActive: true,
-        timerDuration: 20,
-        questionCount: 8,
-        weeklyLeaderboard: false,
-        monthlyLeaderboard: true,
-        reward: "premium_1day"
-      }
-    ];
-    
-    sampleGames.forEach(game => this.createGame(game));
-    
-    // Sample badges
-    const sampleBadges: InsertBadge[] = [
-      {
-        name: "Super Campione",
-        description: "Vinci 5 partite consecutive",
-        icon: "fas fa-award",
-        color: "blue"
-      },
-      {
-        name: "Velocista",
-        description: "Completa un gioco in meno di 30 secondi",
-        icon: "fas fa-bolt",
-        color: "yellow"
-      },
-      {
-        name: "Genio Matematico",
-        description: "Rispondi correttamente a tutte le domande di matematica",
-        icon: "fas fa-brain",
-        color: "purple"
-      }
-    ];
-    
-    sampleBadges.forEach(badge => this.createBadge(badge));
-    
-    // Sample rewards
-    const sampleRewards: InsertReward[] = [
-      {
-        name: "Bonus 500 Punti",
-        description: "Completa 3 giochi diversi in un giorno",
-        type: "points",
-        value: "500",
-        icon: "fas fa-gift",
-        color: "green",
-        available: 30
-      },
-      {
-        name: "Premium per 1 settimana",
-        description: "Vinci 10 partite in una settimana",
-        type: "premium",
-        value: "1week",
-        icon: "fas fa-gem",
-        color: "red",
-        available: 5
-      },
-      {
-        name: "Coupon Sconto 10%",
-        description: "Completa tutti i livelli di un gioco",
-        type: "coupon",
-        value: "10",
-        icon: "fas fa-ticket-alt",
-        color: "blue",
-        available: 50
-      }
-    ];
-    
-    sampleRewards.forEach(reward => this.createReward(reward));
-    
-    // Assign badges to games
-    this.assignBadgeToGame({ gameId: 1, badgeId: 1 });
-    this.assignBadgeToGame({ gameId: 1, badgeId: 2 });
-    this.assignBadgeToGame({ gameId: 2, badgeId: 3 });
-  }
-
-  // User methods
+export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.userId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
     return user;
   }
-  
-  // Game methods
+
   async getAllGames(): Promise<Game[]> {
-    return Array.from(this.games.values());
+    return await db.select().from(games);
   }
-  
+
   async getGame(id: number): Promise<Game | undefined> {
-    return this.games.get(id);
+    const [game] = await db.select().from(games).where(eq(games.id, id));
+    return game || undefined;
   }
-  
+
   async createGame(game: InsertGame): Promise<Game> {
-    const id = this.gameId++;
-    const now = new Date();
-    const newGame: Game = { ...game, id, createdAt: now };
-    this.games.set(id, newGame);
+    const [newGame] = await db
+      .insert(games)
+      .values(game)
+      .returning();
     
     // Update stats
-    this.statsData.totalGames += 1;
-    if (game.isActive) {
-      this.statsData.activeGames += 1;
+    const [statsData] = await db.select().from(stats).limit(1);
+    
+    if (statsData) {
+      await db
+        .update(stats)
+        .set({
+          totalGames: statsData.totalGames + 1,
+          activeGames: game.isActive ? statsData.activeGames + 1 : statsData.activeGames,
+          updatedAt: new Date()
+        })
+        .where(eq(stats.id, statsData.id));
+    } else {
+      // Initialize stats if they don't exist
+      await db
+        .insert(stats)
+        .values({
+          totalGames: 1,
+          activeGames: game.isActive ? 1 : 0,
+          activeUsers: 0,
+          awardedBadges: 0
+        });
     }
     
     return newGame;
   }
-  
+
   async updateGame(id: number, gameUpdate: Partial<InsertGame>): Promise<Game | undefined> {
-    const existingGame = this.games.get(id);
+    // Get the existing game
+    const [existingGame] = await db
+      .select()
+      .from(games)
+      .where(eq(games.id, id));
+    
     if (!existingGame) {
       return undefined;
     }
@@ -235,112 +119,207 @@ export class MemStorage implements IStorage {
     const wasActive = existingGame.isActive;
     const willBeActive = gameUpdate.isActive !== undefined ? gameUpdate.isActive : wasActive;
     
-    // Update the game
-    const updatedGame: Game = { ...existingGame, ...gameUpdate };
-    this.games.set(id, updatedGame);
+    // Update game
+    const [updatedGame] = await db
+      .update(games)
+      .set(gameUpdate)
+      .where(eq(games.id, id))
+      .returning();
     
     // Update stats if active status changed
     if (wasActive !== willBeActive) {
-      this.statsData.activeGames += willBeActive ? 1 : -1;
+      const [statsData] = await db.select().from(stats).limit(1);
+      
+      if (statsData) {
+        await db
+          .update(stats)
+          .set({
+            activeGames: willBeActive ? statsData.activeGames + 1 : statsData.activeGames - 1,
+            updatedAt: new Date()
+          })
+          .where(eq(stats.id, statsData.id));
+      }
     }
     
     return updatedGame;
   }
-  
+
   async toggleGameStatus(id: number): Promise<Game | undefined> {
-    const game = this.games.get(id);
-    if (!game) {
+    // Get the existing game
+    const [existingGame] = await db
+      .select()
+      .from(games)
+      .where(eq(games.id, id));
+    
+    if (!existingGame) {
       return undefined;
     }
     
-    const updatedGame: Game = { ...game, isActive: !game.isActive };
-    this.games.set(id, updatedGame);
+    // Toggle status
+    const newStatus = !existingGame.isActive;
+    
+    // Update game
+    const [updatedGame] = await db
+      .update(games)
+      .set({ isActive: newStatus })
+      .where(eq(games.id, id))
+      .returning();
     
     // Update stats
-    this.statsData.activeGames += updatedGame.isActive ? 1 : -1;
+    const [statsData] = await db.select().from(stats).limit(1);
+    
+    if (statsData) {
+      await db
+        .update(stats)
+        .set({
+          activeGames: newStatus ? statsData.activeGames + 1 : statsData.activeGames - 1,
+          updatedAt: new Date()
+        })
+        .where(eq(stats.id, statsData.id));
+    }
     
     return updatedGame;
   }
-  
-  // Badge methods
+
   async getAllBadges(): Promise<Badge[]> {
-    return Array.from(this.badges.values());
+    return await db.select().from(badges);
   }
-  
+
   async getBadge(id: number): Promise<Badge | undefined> {
-    return this.badges.get(id);
+    const [badge] = await db.select().from(badges).where(eq(badges.id, id));
+    return badge || undefined;
   }
-  
+
   async createBadge(badge: InsertBadge): Promise<Badge> {
-    const id = this.badgeId++;
-    const now = new Date();
-    const newBadge: Badge = { ...badge, id, createdAt: now };
-    this.badges.set(id, newBadge);
+    const [newBadge] = await db
+      .insert(badges)
+      .values(badge)
+      .returning();
     return newBadge;
   }
-  
-  // Reward methods
+
   async getAllRewards(): Promise<Reward[]> {
-    return Array.from(this.rewards.values());
+    return await db.select().from(rewards);
   }
-  
+
   async getReward(id: number): Promise<Reward | undefined> {
-    return this.rewards.get(id);
+    const [reward] = await db.select().from(rewards).where(eq(rewards.id, id));
+    return reward || undefined;
   }
-  
+
   async createReward(reward: InsertReward): Promise<Reward> {
-    const id = this.rewardId++;
-    const now = new Date();
-    const newReward: Reward = { ...reward, id, createdAt: now };
-    this.rewards.set(id, newReward);
+    const [newReward] = await db
+      .insert(rewards)
+      .values(reward)
+      .returning();
     return newReward;
   }
-  
-  // Game-Badge methods
+
   async getGameBadges(gameId: number): Promise<Badge[]> {
-    const badgeIds = Array.from(this.gameBadges.values())
-      .filter(gb => gb.gameId === gameId)
-      .map(gb => gb.badgeId);
+    const badgeRelations = await db
+      .select()
+      .from(gameBadges)
+      .where(eq(gameBadges.gameId, gameId));
     
-    return Array.from(this.badges.values())
-      .filter(badge => badgeIds.includes(badge.id));
+    if (badgeRelations.length === 0) {
+      return [];
+    }
+    
+    const badgeIds = badgeRelations.map(rel => rel.badgeId);
+    
+    const badgeList = await db
+      .select()
+      .from(badges)
+      .where(
+        badgeIds.map(id => eq(badges.id, id)).reduce((acc, curr) => acc || curr)
+      );
+    
+    return badgeList;
   }
-  
+
   async assignBadgeToGame(gameBadge: InsertGameBadge): Promise<GameBadge> {
     // Check if already exists
-    const exists = Array.from(this.gameBadges.values()).some(
-      gb => gb.gameId === gameBadge.gameId && gb.badgeId === gameBadge.badgeId
-    );
+    const [existing] = await db
+      .select()
+      .from(gameBadges)
+      .where(
+        and(
+          eq(gameBadges.gameId, gameBadge.gameId),
+          eq(gameBadges.badgeId, gameBadge.badgeId)
+        )
+      );
     
-    if (exists) {
+    if (existing) {
       throw new Error("Badge already assigned to this game");
     }
     
-    const id = this.gameBadgeId++;
-    const newGameBadge: GameBadge = { ...gameBadge, id };
-    this.gameBadges.set(id, newGameBadge);
+    const [newGameBadge] = await db
+      .insert(gameBadges)
+      .values(gameBadge)
+      .returning();
+    
     return newGameBadge;
   }
-  
+
   async removeBadgeFromGame(gameId: number, badgeId: number): Promise<void> {
-    const gameBadgeEntry = Array.from(this.gameBadges.entries()).find(
-      ([_, gb]) => gb.gameId === gameId && gb.badgeId === badgeId
-    );
-    
-    if (gameBadgeEntry) {
-      this.gameBadges.delete(gameBadgeEntry[0]);
-    }
+    await db
+      .delete(gameBadges)
+      .where(
+        and(
+          eq(gameBadges.gameId, gameId),
+          eq(gameBadges.badgeId, badgeId)
+        )
+      );
   }
-  
-  // Stats methods
+
   async getStats(): Promise<Stats> {
-    return this.statsData;
+    const [statsData] = await db.select().from(stats).limit(1);
+    
+    if (!statsData) {
+      // Initialize stats if they don't exist
+      const [newStats] = await db
+        .insert(stats)
+        .values({
+          totalGames: 0,
+          activeGames: 0,
+          activeUsers: 0,
+          awardedBadges: 0
+        })
+        .returning();
+      
+      return newStats;
+    }
+    
+    return statsData;
   }
-  
+
   async updateStats(statsUpdate: Partial<Stats>): Promise<Stats> {
-    this.statsData = { ...this.statsData, ...statsUpdate, updatedAt: new Date() };
-    return this.statsData;
+    const [statsData] = await db.select().from(stats).limit(1);
+    
+    if (!statsData) {
+      // Initialize stats if they don't exist with the provided updates
+      const [newStats] = await db
+        .insert(stats)
+        .values({
+          totalGames: statsUpdate.totalGames || 0,
+          activeGames: statsUpdate.activeGames || 0,
+          activeUsers: statsUpdate.activeUsers || 0,
+          awardedBadges: statsUpdate.awardedBadges || 0,
+        })
+        .returning();
+      
+      return newStats;
+    }
+    
+    // Update existing stats
+    const [updatedStats] = await db
+      .update(stats)
+      .set({ ...statsUpdate, updatedAt: new Date() })
+      .where(eq(stats.id, statsData.id))
+      .returning();
+    
+    return updatedStats;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

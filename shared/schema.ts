@@ -1,6 +1,7 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { relations } from "drizzle-orm";
 
 // User schema (keeping the original one)
 export const users = pgTable("users", {
@@ -8,6 +9,10 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
 });
+
+export const usersRelations = relations(users, ({ many }) => ({
+  // a user could have relationships to other tables in the future
+}));
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
@@ -28,6 +33,10 @@ export const games = pgTable("games", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const gamesRelations = relations(games, ({ many }) => ({
+  badges: many(gameBadges)
+}));
+
 export const insertGameSchema = createInsertSchema(games).omit({
   id: true,
   createdAt: true
@@ -43,6 +52,10 @@ export const badges = pgTable("badges", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const badgesRelations = relations(badges, ({ many }) => ({
+  games: many(gameBadges)
+}));
+
 export const insertBadgeSchema = createInsertSchema(badges).omit({
   id: true,
   createdAt: true
@@ -54,6 +67,17 @@ export const gameBadges = pgTable("game_badges", {
   gameId: integer("game_id").notNull().references(() => games.id),
   badgeId: integer("badge_id").notNull().references(() => badges.id),
 });
+
+export const gameBadgesRelations = relations(gameBadges, ({ one }) => ({
+  game: one(games, {
+    fields: [gameBadges.gameId],
+    references: [games.id]
+  }),
+  badge: one(badges, {
+    fields: [gameBadges.badgeId],
+    references: [badges.id]
+  })
+}));
 
 export const insertGameBadgeSchema = createInsertSchema(gameBadges).omit({
   id: true
@@ -71,6 +95,10 @@ export const rewards = pgTable("rewards", {
   available: integer("available").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+export const rewardsRelations = relations(rewards, ({ }) => ({
+  // Rewards could have relationships to other tables in the future
+}));
 
 export const insertRewardSchema = createInsertSchema(rewards).omit({
   id: true,
