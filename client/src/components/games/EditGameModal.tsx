@@ -203,19 +203,32 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{isEditing ? 'Modifica Gioco' : 'Nuovo Gioco'}</DialogTitle>
+      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="border-b pb-3">
+          <DialogTitle className="text-xl font-bold flex items-center">
+            <i className={`fas fa-${isEditing ? 'edit' : 'plus'} mr-2 text-blue-500`}></i>
+            {isEditing ? 'Modifica Gioco' : 'Nuovo Gioco'}
+          </DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-3">
+            <div className="bg-blue-50 p-4 rounded-lg mb-4 text-sm text-blue-700 border border-blue-100">
+              <div className="flex items-center">
+                <i className="fas fa-info-circle mr-2 text-blue-500"></i>
+                <p>Configura i dettagli principali del gioco. Puoi modificare questi parametri in qualsiasi momento.</p>
+              </div>
+            </div>
+            
             <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nome del Gioco</FormLabel>
+                  <FormLabel>
+                    <i className="fas fa-gamepad mr-1.5 text-gray-500"></i>
+                    Nome del Gioco
+                  </FormLabel>
                   <FormControl>
                     <Input {...field} placeholder="Quiz Generale" />
                   </FormControl>
@@ -228,12 +241,16 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Descrizione</FormLabel>
+                  <FormLabel>
+                    <i className="fas fa-align-left mr-1.5 text-gray-500"></i>
+                    Descrizione
+                  </FormLabel>
                   <FormControl>
                     <Textarea 
                       {...field} 
                       placeholder="Descrizione del gioco" 
                       rows={2}
+                      className="resize-none"
                     />
                   </FormControl>
                 </FormItem>
@@ -246,7 +263,10 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
                 name="timerDuration"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Timer (secondi)</FormLabel>
+                    <FormLabel>
+                      <i className="fas fa-clock mr-1.5 text-gray-500"></i>
+                      Timer (secondi)
+                    </FormLabel>
                     <FormControl>
                       <Input 
                         type="number" 
@@ -254,8 +274,10 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
                         min={5}
                         placeholder="30"
                         onChange={(e) => field.onChange(parseInt(e.target.value))}
+                        className="font-medium"
                       />
                     </FormControl>
+                    <FormDescription>Tempo a disposizione per rispondere</FormDescription>
                   </FormItem>
                 )}
               />
@@ -265,7 +287,10 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
                 name="questionCount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Numero Domande</FormLabel>
+                    <FormLabel>
+                      <i className="fas fa-question-circle mr-1.5 text-gray-500"></i>
+                      Numero Domande
+                    </FormLabel>
                     <FormControl>
                       <Input 
                         type="number" 
@@ -273,8 +298,10 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
                         min={1}
                         placeholder="10"
                         onChange={(e) => field.onChange(parseInt(e.target.value))}
+                        className="font-medium"
                       />
                     </FormControl>
+                    <FormDescription>Quante domande per partita</FormDescription>
                   </FormItem>
                 )}
               />
@@ -452,32 +479,49 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="isActive"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox 
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormLabel className="cursor-pointer">Gioco Attivo</FormLabel>
-                </FormItem>
-              )}
-            />
+            <div className="bg-gray-50 p-4 rounded-lg my-4 border">
+              <FormField
+                control={form.control}
+                name="isActive"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox 
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        className="h-5 w-5"
+                      />
+                    </FormControl>
+                    <div>
+                      <FormLabel className="cursor-pointer text-base">
+                        <i className={`fas ${field.value ? 'fa-toggle-on text-green-500' : 'fa-toggle-off text-gray-400'} mr-2`}></i>
+                        Gioco Attivo
+                      </FormLabel>
+                      <FormDescription>
+                        {field.value 
+                          ? "Il gioco è visibile e giocabile dagli utenti." 
+                          : "Il gioco non sarà visibile o giocabile finché non viene attivato."}
+                      </FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+            </div>
 
-            <DialogFooter>
+            <DialogFooter className="border-t pt-4 mt-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={onClose}
+                className="border-gray-300"
+                disabled={saveMutation.isPending}
               >
+                <i className="fas fa-times mr-2"></i>
                 Annulla
               </Button>
               <Button 
                 type="submit"
+                className="bg-blue-600 hover:bg-blue-700"
                 disabled={saveMutation.isPending}
               >
                 {saveMutation.isPending ? (
@@ -486,7 +530,10 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
                     Salvataggio...
                   </>
                 ) : (
-                  'Salva'
+                  <>
+                    <i className="fas fa-save mr-2"></i>
+                    {isEditing ? 'Aggiorna' : 'Crea Gioco'}
+                  </>
                 )}
               </Button>
             </DialogFooter>

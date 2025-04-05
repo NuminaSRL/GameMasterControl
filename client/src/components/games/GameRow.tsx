@@ -66,20 +66,21 @@ export default function GameRow({ game, onEdit, onToggle }: GameRowProps) {
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
         <button 
-          className="text-primary hover:text-blue-700 mr-3"
+          className="bg-blue-100 text-blue-600 hover:bg-blue-200 px-3 py-1 rounded-md mr-2 transition-colors flex items-center"
           onClick={onEdit}
         >
-          <i className="fas fa-edit"></i>
+          <i className="fas fa-edit mr-1"></i> Modifica
         </button>
         <button 
-          className={`${
+          className={`px-3 py-1 rounded-md transition-colors flex items-center ${
             game.isActive 
-              ? "text-danger hover:text-red-700"
-              : "text-success hover:text-green-700"
+              ? "bg-red-100 text-red-600 hover:bg-red-200"
+              : "bg-green-100 text-green-600 hover:bg-green-200"
           }`}
           onClick={onToggle}
         >
-          <i className="fas fa-power-off"></i>
+          <i className="fas fa-power-off mr-1"></i> 
+          {game.isActive ? "Disattiva" : "Attiva"}
         </button>
       </td>
     </tr>
