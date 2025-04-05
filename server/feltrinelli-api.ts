@@ -80,7 +80,7 @@ interface Reward {
 }
 
 // Configurazione base
-const API_BASE_URL = process.env.FELTRINELLI_API_URL || 'http://api.feltrinelli-gaming.com';
+const API_BASE_URL = process.env.FELTRINELLI_API_URL || 'http://localhost:3000';
 const GAME_IDS = {
   BOOK_QUIZ: '00000000-0000-0000-0000-000000000001',
   AUTHOR_QUIZ: '00000000-0000-0000-0000-000000000002',
