@@ -124,13 +124,16 @@ async function fetchWithErrorHandling<T>(url: string, options?: RequestInit): Pr
 // Funzioni per interagire con le API di Feltrinelli
 export async function healthCheck(): Promise<boolean> {
   try {
-    // Prova prima l'endpoint /api/health-check, se fallisce prova /api/health
+    // La variabile API_BASE_URL già contiene '/api', quindi non dobbiamo ripeterlo
+    // Proviamo prima con '/health-check', se fallisce proviamo con '/health'
     try {
-      const response = await fetchWithErrorHandling<HealthResponse>(`${API_BASE_URL}/api/health-check`);
+      console.log(`Attempting to connect to ${API_BASE_URL}/health-check`);
+      const response = await fetchWithErrorHandling<HealthResponse>(`${API_BASE_URL}/health-check`);
       return (response as HealthResponse).status === 'ok';
     } catch (error) {
-      // Fallback a /api/health
-      const response = await fetchWithErrorHandling<HealthResponse>(`${API_BASE_URL}/api/health`);
+      // Fallback a /health
+      console.log(`Fallback to ${API_BASE_URL}/health`);
+      const response = await fetchWithErrorHandling<HealthResponse>(`${API_BASE_URL}/health`);
       return (response as HealthResponse).status === 'ok';
     }
   } catch (error) {
@@ -155,7 +158,7 @@ export async function createGameSession(userId: string, gameType: 'books' | 'aut
       break;
   }
   
-  return await fetchWithErrorHandling<GameSession>(`${API_BASE_URL}/api/games/session`, {
+  return await fetchWithErrorHandling<GameSession>(`${API_BASE_URL}/games/session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ user_id: userId, game_id: gameId })
@@ -164,7 +167,7 @@ export async function createGameSession(userId: string, gameType: 'books' | 'aut
 
 // Quiz Libri
 export async function getBookQuizQuestion(difficulty: number = 1): Promise<BookQuizQuestion> {
-  return await fetchWithErrorHandling<BookQuizQuestion>(`${API_BASE_URL}/api/games/bookquiz/question?difficulty=${difficulty}`);
+  return await fetchWithErrorHandling<BookQuizQuestion>(`${API_BASE_URL}/games/bookquiz/question?difficulty=${difficulty}`);
 }
 
 export async function submitBookQuizAnswer(
@@ -173,7 +176,7 @@ export async function submitBookQuizAnswer(
   answerOptionId: string, 
   timeTaken: number
 ): Promise<AnswerResult> {
-  return await fetchWithErrorHandling<AnswerResult>(`${API_BASE_URL}/api/games/bookquiz/answer`, {
+  return await fetchWithErrorHandling<AnswerResult>(`${API_BASE_URL}/games/bookquiz/answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -187,7 +190,7 @@ export async function submitBookQuizAnswer(
 
 // Quiz Autori
 export async function getAuthorQuizQuestion(difficulty: number = 1): Promise<AuthorQuizQuestion> {
-  return await fetchWithErrorHandling<AuthorQuizQuestion>(`${API_BASE_URL}/api/games/authorquiz/question?difficulty=${difficulty}`);
+  return await fetchWithErrorHandling<AuthorQuizQuestion>(`${API_BASE_URL}/games/authorquiz/question?difficulty=${difficulty}`);
 }
 
 export async function submitAuthorQuizAnswer(
@@ -196,7 +199,7 @@ export async function submitAuthorQuizAnswer(
   answerOptionId: string, 
   timeTaken: number
 ): Promise<AnswerResult> {
-  return await fetchWithErrorHandling<AnswerResult>(`${API_BASE_URL}/api/games/authorquiz/answer`, {
+  return await fetchWithErrorHandling<AnswerResult>(`${API_BASE_URL}/games/authorquiz/answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -210,7 +213,7 @@ export async function submitAuthorQuizAnswer(
 
 // Quiz Anni
 export async function getYearQuizQuestion(difficulty: number = 1): Promise<YearQuizQuestion> {
-  return await fetchWithErrorHandling<YearQuizQuestion>(`${API_BASE_URL}/api/games/yearquiz/question?difficulty=${difficulty}`);
+  return await fetchWithErrorHandling<YearQuizQuestion>(`${API_BASE_URL}/games/yearquiz/question?difficulty=${difficulty}`);
 }
 
 export async function submitYearQuizAnswer(
@@ -219,7 +222,7 @@ export async function submitYearQuizAnswer(
   answerYear: number, 
   timeTaken: number
 ): Promise<AnswerResult> {
-  return await fetchWithErrorHandling<AnswerResult>(`${API_BASE_URL}/api/games/yearquiz/answer`, {
+  return await fetchWithErrorHandling<AnswerResult>(`${API_BASE_URL}/games/yearquiz/answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -237,7 +240,7 @@ export async function getLeaderboard(
   limit: number = 10
 ): Promise<LeaderboardEntry[]> {
   const response = await fetchWithErrorHandling<LeaderboardResponse>(
-    `${API_BASE_URL}/api/leaderboard?period=${period}&limit=${limit}`
+    `${API_BASE_URL}/leaderboard?period=${period}&limit=${limit}`
   );
   return (response as LeaderboardResponse).data;
 }
@@ -248,7 +251,7 @@ export async function getGameLeaderboard(
   limit: number = 10
 ): Promise<LeaderboardEntry[]> {
   const response = await fetchWithErrorHandling<LeaderboardResponse>(
-    `${API_BASE_URL}/api/leaderboard/${gameId}?period=${period}&limit=${limit}`
+    `${API_BASE_URL}/leaderboard/${gameId}?period=${period}&limit=${limit}`
   );
   return (response as LeaderboardResponse).data;
 }
@@ -260,7 +263,7 @@ export async function submitScore(
   totalQuestions: number,
   sessionId: string
 ): Promise<{ success: boolean, message: string }> {
-  return await fetchWithErrorHandling<SubmitScoreResponse>(`${API_BASE_URL}/api/leaderboard/submit-all-periods`, {
+  return await fetchWithErrorHandling<SubmitScoreResponse>(`${API_BASE_URL}/leaderboard/submit-all-periods`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -279,13 +282,13 @@ export async function getAvailableRewards(
   period: 'all_time' | 'monthly' | 'weekly' = 'all_time'
 ): Promise<Reward[]> {
   const response = await fetchWithErrorHandling<RewardsResponse>(
-    `${API_BASE_URL}/api/rewards/available?game_id=${gameId}&period=${period}`
+    `${API_BASE_URL}/rewards/available?game_id=${gameId}&period=${period}`
   );
   return (response as RewardsResponse).rewards;
 }
 
 export async function getUserRewards(userId: string): Promise<Reward[]> {
-  const response = await fetchWithErrorHandling<RewardsResponse>(`${API_BASE_URL}/api/rewards/user/${userId}`);
+  const response = await fetchWithErrorHandling<RewardsResponse>(`${API_BASE_URL}/rewards/user/${userId}`);
   return (response as RewardsResponse).rewards;
 }
 
