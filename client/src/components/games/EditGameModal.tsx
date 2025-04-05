@@ -24,7 +24,6 @@ interface EditGameModalProps {
 // Create a form schema based on the insertGameSchema
 const formSchema = insertGameSchema.extend({
   badges: z.array(z.number()).optional(),
-  gameType: z.enum(["books", "authors", "years"]),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -61,7 +60,7 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
     weeklyLeaderboard: game?.weeklyLeaderboard ?? true,
     monthlyLeaderboard: game?.monthlyLeaderboard ?? true,
     reward: game?.reward || 'points_100',
-    gameType: game?.gameType || 'books',
+    gameType: (game?.gameType as "books" | "authors" | "years") || 'books',
     feltrinelliGameId: game?.feltrinelliGameId || '00000000-0000-0000-0000-000000000001',
     difficulty: game?.difficulty || 1,
   };
@@ -104,7 +103,7 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
         weeklyLeaderboard: game?.weeklyLeaderboard ?? true,
         monthlyLeaderboard: game?.monthlyLeaderboard ?? true,
         reward: game?.reward || 'points_100',
-        gameType: game?.gameType || 'books',
+        gameType: (game?.gameType as "books" | "authors" | "years") || 'books',
         feltrinelliGameId: game?.feltrinelliGameId || '00000000-0000-0000-0000-000000000001',
         difficulty: game?.difficulty || 1,
         badges: gameBadges.map(badge => badge.id),

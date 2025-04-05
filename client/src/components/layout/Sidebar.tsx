@@ -11,9 +11,9 @@ interface SidebarItemProps {
 function SidebarItem({ href, icon, children, active }: SidebarItemProps) {
   return (
     <Link href={href}>
-      <a
+      <div
         className={cn(
-          "flex items-center px-4 py-2 mt-1 text-sm font-medium rounded-md group",
+          "flex items-center px-4 py-2 mt-1 text-sm font-medium rounded-md group cursor-pointer",
           active
             ? "text-white bg-gray-700"
             : "text-gray-300 hover:bg-gray-700 hover:text-white"
@@ -21,7 +21,7 @@ function SidebarItem({ href, icon, children, active }: SidebarItemProps) {
       >
         <i className={`${icon} mr-3 ${active ? "text-gray-300" : "text-gray-400"}`}></i>
         {children}
-      </a>
+      </div>
     </Link>
   );
 }
