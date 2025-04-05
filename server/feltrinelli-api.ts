@@ -124,9 +124,17 @@ async function fetchWithErrorHandling<T>(url: string, options?: RequestInit): Pr
 // Funzioni per interagire con le API di Feltrinelli
 export async function healthCheck(): Promise<boolean> {
   try {
-    const response = await fetchWithErrorHandling<HealthResponse>(`${API_BASE_URL}/api/health`);
-    return (response as HealthResponse).status === 'ok';
+    // Prova prima l'endpoint /api/health-check, se fallisce prova /api/health
+    try {
+      const response = await fetchWithErrorHandling<HealthResponse>(`${API_BASE_URL}/api/health-check`);
+      return (response as HealthResponse).status === 'ok';
+    } catch (error) {
+      // Fallback a /api/health
+      const response = await fetchWithErrorHandling<HealthResponse>(`${API_BASE_URL}/api/health`);
+      return (response as HealthResponse).status === 'ok';
+    }
   } catch (error) {
+    console.error('Health check failed:', error);
     return false;
   }
 }
