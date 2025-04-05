@@ -30,6 +30,9 @@ export const games = pgTable("games", {
   weeklyLeaderboard: boolean("weekly_leaderboard").notNull().default(true),
   monthlyLeaderboard: boolean("monthly_leaderboard").notNull().default(true),
   reward: text("reward").notNull(),
+  gameType: text("game_type").default('books'), // 'books', 'authors', 'years'
+  feltrinelliGameId: text("feltrinelli_game_id").default('00000000-0000-0000-0000-000000000001'), // UUID from Feltrinelli API
+  difficulty: integer("difficulty").notNull().default(1), // 1-3 scale
   createdAt: timestamp("created_at").defaultNow(),
 });
 

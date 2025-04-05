@@ -24,6 +24,7 @@ interface EditGameModalProps {
 // Create a form schema based on the insertGameSchema
 const formSchema = insertGameSchema.extend({
   badges: z.array(z.number()).optional(),
+  gameType: z.enum(["books", "authors", "years"]),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -31,6 +32,12 @@ type FormValues = z.infer<typeof formSchema>;
 export default function EditGameModal({ isOpen, onClose, game }: EditGameModalProps) {
   const { toast } = useToast();
   const isEditing = !!game;
+  const [gameIds, setGameIds] = useState<{books: string; authors: string; years: string} | null>(null);
+  
+  // Utility to ensure a string is never null
+  const ensureString = (value: string | null | undefined): string => {
+    return value || '';
+  };
 
   // Fetch all badges
   const { data: allBadges = [] } = useQuery<Badge[]>({
@@ -54,6 +61,9 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
     weeklyLeaderboard: game?.weeklyLeaderboard ?? true,
     monthlyLeaderboard: game?.monthlyLeaderboard ?? true,
     reward: game?.reward || 'points_100',
+    gameType: game?.gameType || 'books',
+    feltrinelliGameId: game?.feltrinelliGameId || '00000000-0000-0000-0000-000000000001',
+    difficulty: game?.difficulty || 1,
   };
 
   // Create form
@@ -61,6 +71,26 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
     resolver: zodResolver(formSchema),
     defaultValues,
   });
+
+  // Fetch game IDs when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      // Fetch game IDs
+      fetch('/api/feltrinelli/game-ids')
+        .then(res => res.json())
+        .then(data => {
+          setGameIds(data);
+        })
+        .catch(error => {
+          console.error('Failed to fetch game IDs:', error);
+          toast({
+            title: "Errore",
+            description: "Non è stato possibile recuperare gli ID dei giochi",
+            variant: "destructive",
+          });
+        });
+    }
+  }, [isOpen, toast]);
 
   // Reset form when game changes
   useEffect(() => {
@@ -74,10 +104,24 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
         weeklyLeaderboard: game?.weeklyLeaderboard ?? true,
         monthlyLeaderboard: game?.monthlyLeaderboard ?? true,
         reward: game?.reward || 'points_100',
+        gameType: game?.gameType || 'books',
+        feltrinelliGameId: game?.feltrinelliGameId || '00000000-0000-0000-0000-000000000001',
+        difficulty: game?.difficulty || 1,
         badges: gameBadges.map(badge => badge.id),
       });
     }
   }, [isOpen, game, gameBadges, form]);
+  
+  // Update feltrinelliGameId when gameType changes
+  useEffect(() => {
+    if (gameIds) {
+      const gameType = form.watch('gameType');
+      if (gameType) {
+        const feltrinelliGameId = gameIds[gameType as keyof typeof gameIds];
+        form.setValue('feltrinelliGameId', feltrinelliGameId || '');
+      }
+    }
+  }, [gameIds, form]);
 
   // Save game mutation
   const saveMutation = useMutation({
@@ -270,6 +314,82 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
                 )}
               />
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="gameType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipo di Gioco</FormLabel>
+                    <Select 
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        // Update feltrinelliGameId when gameType changes
+                        if (gameIds && value) {
+                          const feltrinelliGameId = gameIds[value as keyof typeof gameIds];
+                          form.setValue('feltrinelliGameId', feltrinelliGameId || '');
+                        }
+                      }} 
+                      defaultValue={ensureString(field.value)}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleziona un tipo" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="books">Quiz Libri</SelectItem>
+                        <SelectItem value="authors">Quiz Autori</SelectItem>
+                        <SelectItem value="years">Quiz Anni</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Tipo di quiz fornito da Feltrinelli</FormDescription>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="difficulty"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Difficoltà</FormLabel>
+                    <Select 
+                      onValueChange={(value) => field.onChange(parseInt(value))} 
+                      defaultValue={typeof field.value !== 'undefined' ? field.value.toString() : '1'}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleziona la difficoltà" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="1">Facile</SelectItem>
+                        <SelectItem value="2">Media</SelectItem>
+                        <SelectItem value="3">Difficile</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="feltrinelliGameId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>ID Gioco Feltrinelli</FormLabel>
+                  <FormControl>
+                    <Input value={ensureString(field.value)} onChange={field.onChange} onBlur={field.onBlur} name={field.name} ref={field.ref} readOnly />
+                  </FormControl>
+                  <FormDescription>
+                    Questo ID viene generato automaticamente in base al tipo di gioco selezionato.
+                  </FormDescription>
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

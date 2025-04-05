@@ -3,12 +3,26 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertGameSchema, insertBadgeSchema, insertRewardSchema, insertGameBadgeSchema } from "@shared/schema";
 import * as feltrinelliApi from "./feltrinelli-api";
+import { GAME_IDS } from "./feltrinelli-api";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Create HTTP server
   const httpServer = createServer(app);
 
   // === FELTRINELLI API INTEGRATION ===
+  
+  // Ottieni IDs dei giochi
+  app.get('/api/feltrinelli/game-ids', (req, res) => {
+    try {
+      res.json({
+        books: GAME_IDS.BOOK_QUIZ,
+        authors: GAME_IDS.AUTHOR_QUIZ,
+        years: GAME_IDS.YEAR_QUIZ
+      });
+    } catch (error) {
+      res.status(500).json({ message: `Error fetching game IDs: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
   
   // Verifica connessione alle API di Feltrinelli
   app.get('/api/feltrinelli/health', async (req, res) => {
