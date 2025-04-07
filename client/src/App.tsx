@@ -8,6 +8,7 @@ import Games from "@/pages/Games";
 import Badges from "@/pages/Badges";
 import Rewards from "@/pages/Rewards";
 import FeltrinelliApiTest from "@/pages/FeltrinelliApiTest";
+import FeltrinelliMapping from "@/pages/FeltrinelliMapping";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
 
@@ -24,6 +25,7 @@ function AppContent() {
             <Route path="/badges" component={Badges} />
             <Route path="/rewards" component={Rewards} />
             <Route path="/api-test" component={FeltrinelliApiTest} />
+            <Route path="/feltrinelli-mapping" component={FeltrinelliMapping} />
             <Route component={NotFound} />
           </Switch>
         </main>

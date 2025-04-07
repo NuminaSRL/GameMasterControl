@@ -58,6 +58,9 @@ export default function Sidebar() {
             <SidebarItem href="/api-test" icon="fas fa-flask" active={location === "/api-test"}>
               Test API
             </SidebarItem>
+            <SidebarItem href="/feltrinelli-mapping" icon="fas fa-exchange-alt" active={location === "/feltrinelli-mapping"}>
+              Mapping Feltrinelli
+            </SidebarItem>
           </nav>
         </div>
         <div className="flex-shrink-0 flex p-4 border-t border-gray-700">

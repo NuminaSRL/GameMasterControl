@@ -4,6 +4,8 @@ import { storage } from "./storage";
 import { insertGameSchema, insertBadgeSchema, insertRewardSchema, insertGameBadgeSchema } from "@shared/schema";
 import * as feltrinelliApi from "./feltrinelli-api";
 import { GAME_IDS } from "./feltrinelli-api";
+import * as fltApi from "./flt-api";
+import { supabase } from "./supabase";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Create HTTP server
@@ -636,6 +638,221 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updatedStats);
     } catch (error) {
       res.status(500).json({ message: `Error updating stats: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // === FLT API - ESPOSIZIONE DEL NOSTRO SISTEMA COME API ===
+
+  // Health check
+  app.get('/api/v1/health', (req, res) => fltApi.healthCheck(req, res));
+  app.get('/api/v1/health-check', (req, res) => fltApi.healthCheck(req, res));
+
+  // Gestione sessioni
+  app.post('/api/v1/games/session', (req, res) => fltApi.createGameSession(req, res));
+
+  // Quiz libri
+  app.get('/api/v1/games/bookquiz/question', (req, res) => fltApi.getBookQuizQuestion(req, res));
+  app.post('/api/v1/games/bookquiz/answer', (req, res) => fltApi.submitBookQuizAnswer(req, res));
+
+  // Leaderboard
+  app.get('/api/v1/leaderboard', (req, res) => fltApi.getLeaderboard(req, res));
+  app.get('/api/v1/leaderboard/:gameId', (req, res) => fltApi.getGameLeaderboard(req, res));
+  app.post('/api/v1/leaderboard/submit', (req, res) => fltApi.submitScore(req, res));
+  app.post('/api/v1/leaderboard/submit-all-periods', (req, res) => fltApi.submitScoreAllPeriods(req, res));
+
+  // Rewards
+  app.get('/api/v1/rewards/available', (req, res) => fltApi.getAvailableRewards(req, res));
+  app.get('/api/v1/rewards/user/:userId', (req, res) => fltApi.getUserRewards(req, res));
+
+  // Importazione profili utente
+  app.post('/api/v1/profile/import', (req, res) => fltApi.importFeltrinelliUserProfile(req, res));
+
+  // Inizializzazione delle tabelle FLT al riavvio del server
+  fltApi.initFeltrinelliTables().catch(error => {
+    console.error('Errore durante inizializzazione tabelle Feltrinelli:', error);
+  });
+
+  // === BACKOFFICE API PER FELTRINELLI MAPPING ===
+
+  // Ottieni tutti i giochi mappati
+  app.get('/api/feltrinelli-mapping/games', async (req, res) => {
+    try {
+      const { data } = await supabase
+        .from('flt_games')
+        .select('*')
+        .order('internal_id', { ascending: true });
+
+      const formattedGames = data?.map(game => ({
+        id: game.id,
+        feltrinelliId: game.feltrinelli_id,
+        internalId: game.internal_id,
+        name: game.name,
+        description: game.description,
+        isActive: game.is_active
+      }));
+
+      res.json(formattedGames || []);
+    } catch (error) {
+      console.error('Error fetching Feltrinelli game mappings:', error);
+      res.status(500).json({ error: 'Failed to fetch Feltrinelli game mappings' });
+    }
+  });
+
+  // Ottieni un gioco mappato specifico
+  app.get('/api/feltrinelli-mapping/games/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { data, error } = await supabase
+        .from('flt_games')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        return res.status(404).json({ error: 'Game mapping not found' });
+      }
+
+      const formattedGame = {
+        id: data.id,
+        feltrinelliId: data.feltrinelli_id,
+        internalId: data.internal_id,
+        name: data.name,
+        description: data.description,
+        isActive: data.is_active
+      };
+
+      res.json(formattedGame);
+    } catch (error) {
+      console.error('Error fetching Feltrinelli game mapping:', error);
+      res.status(500).json({ error: 'Failed to fetch Feltrinelli game mapping' });
+    }
+  });
+
+  // Crea un nuovo mapping di gioco
+  app.post('/api/feltrinelli-mapping/games', async (req, res) => {
+    try {
+      const { feltrinelliId, internalId } = req.body;
+
+      if (!feltrinelliId || !internalId) {
+        return res.status(400).json({ error: 'feltrinelliId and internalId are required' });
+      }
+
+      // Verifica se esiste già un mapping con questo feltrinelliId
+      const { data: existingMapping } = await supabase
+        .from('flt_games')
+        .select('*')
+        .eq('feltrinelli_id', feltrinelliId)
+        .single();
+
+      if (existingMapping) {
+        return res.status(409).json({ error: 'A mapping with this Feltrinelli ID already exists' });
+      }
+
+      // Ottieni il gioco interno
+      const internalGame = await storage.getGame(internalId);
+      if (!internalGame) {
+        return res.status(404).json({ error: 'Internal game not found' });
+      }
+
+      // Crea il nuovo mapping
+      const { data, error } = await supabase
+        .from('flt_games')
+        .insert([{
+          id: crypto.randomUUID(),
+          feltrinelli_id: feltrinelliId,
+          internal_id: internalId,
+          name: internalGame.name,
+          description: internalGame.description,
+          is_active: internalGame.isActive
+        }])
+        .select();
+
+      if (error) {
+        throw new Error(`Failed to create game mapping: ${error.message}`);
+      }
+
+      const newMapping = {
+        id: data[0].id,
+        feltrinelliId: data[0].feltrinelli_id,
+        internalId: data[0].internal_id,
+        name: data[0].name,
+        description: data[0].description,
+        isActive: data[0].is_active
+      };
+
+      res.status(201).json(newMapping);
+    } catch (error) {
+      console.error('Error creating Feltrinelli game mapping:', error);
+      res.status(500).json({ error: 'Failed to create Feltrinelli game mapping' });
+    }
+  });
+
+  // Togglea lo stato attivo di un gioco mappato
+  app.post('/api/feltrinelli-mapping/games/:id/toggle', async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Ottieni il mapping corrente
+      const { data: currentMapping, error: fetchError } = await supabase
+        .from('flt_games')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) {
+        return res.status(404).json({ error: 'Game mapping not found' });
+      }
+
+      // Aggiorna lo stato
+      const newActiveState = !currentMapping.is_active;
+
+      const { data, error } = await supabase
+        .from('flt_games')
+        .update({ is_active: newActiveState, updated_at: new Date() })
+        .eq('id', id)
+        .select();
+
+      if (error) {
+        throw new Error(`Failed to update game mapping: ${error.message}`);
+      }
+
+      const updatedMapping = {
+        id: data[0].id,
+        feltrinelliId: data[0].feltrinelli_id,
+        internalId: data[0].internal_id,
+        name: data[0].name,
+        description: data[0].description,
+        isActive: data[0].is_active
+      };
+
+      res.json(updatedMapping);
+    } catch (error) {
+      console.error('Error updating Feltrinelli game mapping:', error);
+      res.status(500).json({ error: 'Failed to update Feltrinelli game mapping' });
+    }
+  });
+
+  // Ottieni tutti i profili utente
+  app.get('/api/feltrinelli-mapping/user-profiles', async (req, res) => {
+    try {
+      const { data } = await supabase
+        .from('flt_user_profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      const formattedProfiles = data?.map(profile => ({
+        id: profile.id,
+        userId: profile.user_id,
+        internalUserId: profile.internal_user_id,
+        username: profile.username,
+        email: profile.email,
+        avatarUrl: profile.avatar_url
+      }));
+
+      res.json(formattedProfiles || []);
+    } catch (error) {
+      console.error('Error fetching Feltrinelli user profiles:', error);
+      res.status(500).json({ error: 'Failed to fetch Feltrinelli user profiles' });
     }
   });
 
