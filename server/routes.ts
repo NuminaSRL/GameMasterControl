@@ -353,7 +353,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Ottieni tutti i badges disponibili
   app.get('/api/feltrinelli/badges', fltSimpleApi.getAllBadges);
   
-  // Ottieni la classifica (leaderboard)
+  // Ottieni la classifica (leaderboard) da Feltrinelli API
   app.get('/api/feltrinelli/leaderboard-data', async (req, res) => {
     try {
       const { gameId, period = 'all_time', limit = 10 } = req.query;
@@ -362,22 +362,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'gameId query parameter is required' });
       }
       
-      // Utilizziamo Drizzle direttamente per evitare problemi con Supabase
-      const result = await db.execute(
-        sql`SELECT * FROM flt_leaderboard 
-            WHERE game_id = ${gameId as string} 
-            AND period = ${period as string} 
-            ORDER BY points DESC 
-            LIMIT ${Number(limit)}`
-      ).catch(err => {
-        console.error('Database error fetching leaderboard:', err);
-        return { rows: [] };
-      });
+      // Utilizziamo l'API di Feltrinelli per recuperare la classifica
+      const validPeriod = ['all_time', 'monthly', 'weekly'].includes(period as string) 
+        ? (period as 'all_time' | 'monthly' | 'weekly') 
+        : 'all_time';
       
-      // Per garantire compatibilità con il client, restituiamo un formato consistente
-      const leaderboardEntries = result.rows || [];
-      
-      res.json({ data: leaderboardEntries });
+      try {
+        // Recupera la classifica per il gioco specifico
+        const leaderboardEntries = await feltrinelliApi.getGameLeaderboard(
+          gameId as string,
+          validPeriod,
+          Number(limit)
+        );
+        
+        res.json({ data: leaderboardEntries });
+      } catch (fetchError) {
+        console.error('Error fetching leaderboard from Feltrinelli API:', fetchError);
+        // In caso di errore con l'API esterna, restituiamo un array vuoto
+        res.json({ data: [] });
+      }
     } catch (error) {
       console.error('Error in leaderboard endpoint:', error);
       // Per evitare errori 500 al client, restituiamo un array vuoto
