@@ -10,6 +10,34 @@ Un moderno pannello di controllo per la gestione di giochi basati su quiz letter
 - API esterne: Feltrinelli Gaming API
 - Deployment: Railway (backend), Vercel (frontend)
 
+## API Documentation
+
+Per la documentazione dettagliata delle API, consultare il file [API_Documentation.md](./API_Documentation.md).
+
+### API Endpoints Principali
+
+- Health Check: `GET /api/health`
+- Game IDs: `GET /api/feltrinelli/game-ids`
+- Sessioni di gioco:
+  - `POST /api/feltrinelli/session`
+  - `POST /api/games/session`
+- Quiz Libri:
+  - `GET /api/feltrinelli/bookquiz/question`
+  - `POST /api/feltrinelli/bookquiz/answer`
+- Quiz Autori:
+  - `GET /api/feltrinelli/authorquiz/question`
+  - `POST /api/feltrinelli/authorquiz/answer`
+- Quiz Anni:
+  - `GET /api/feltrinelli/yearquiz/question`
+  - `POST /api/feltrinelli/yearquiz/answer`
+- Classifiche:
+  - `GET /api/feltrinelli/leaderboard`
+  - `GET /api/feltrinelli/leaderboard/:gameType`
+  - `POST /api/feltrinelli/score`
+- Premi:
+  - `GET /api/feltrinelli/rewards`
+  - `GET /api/feltrinelli/rewards/user/:userId`
+
 ## Requisiti
 
 - Node.js (versione 16 o superiore)

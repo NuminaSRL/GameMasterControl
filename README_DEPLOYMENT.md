@@ -114,6 +114,14 @@ Dopo il deployment:
 2. Assicurati che il frontend comunichi correttamente con il backend
 3. Verifica le funzionalità di gestione dei giochi, dei badge e delle ricompense
 4. Controlla che le chiamate all'API Feltrinelli funzionino correttamente
+5. Verifica la documentazione delle API nel file `API_Documentation.md` per assicurarti che tutti gli endpoint funzionino correttamente
+
+## API Documentation
+
+Il file `API_Documentation.md` contiene la documentazione completa di tutti gli endpoint API esposti dal backend. Assicurati che questi endpoint siano accessibili dopo il deployment:
+
+- Endpoint di base: `https://tuo-backend-railway.up.railway.app/api`
+- Gli stessi endpoint sono disponibili anche tramite il frontend Vercel grazie alle regole di rewrite
 
 ## Deployment Monolitico (Alternativa)
 
