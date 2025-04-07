@@ -310,23 +310,70 @@ export class SupabaseStorage implements IStorage {
   // === Badge operations ===
   
   async getAllBadges(): Promise<Badge[]> {
-    const { data, error } = await supabase
-      .from('badges')
-      .select('*')
-      .order('id');
-    
-    if (error) throw new Error(`Failed to fetch badges: ${error.message}`);
-    return (data || []).map(badge => formatDates(this._mapDbBadgeToSchema(badge)));
+    // Prima tentiamo di recuperare i badge dalla tabella 'flt_game_badges'
+    try {
+      console.log("Tentativo di recuperare tutti i badges da Supabase...");
+      const { data, error } = await supabase
+        .from('flt_game_badges')
+        .select('*')
+        .order('id');
+      
+      if (error) {
+        console.log(`Errore nel recuperare badge da 'flt_game_badges': ${error.message}`);
+        throw error;
+      }
+      
+      console.log(`Recuperati ${data?.length || 0} badges dalla tabella 'flt_game_badges'`);
+      return (data || []).map(badge => formatDates(this._mapDbBadgeToSchema(badge)));
+    } catch (error) {
+      // Se fallisce, proviamo con la tabella 'badges' come fallback
+      console.log("Fallback: tentativo di recuperare badges dalla tabella 'badges'...");
+      const { data, error: badgesError } = await supabase
+        .from('badges')
+        .select('*')
+        .order('id');
+      
+      if (badgesError) {
+        console.error(`Fallimento completo nel recuperare badge: ${badgesError.message}`);
+        throw new Error(`Failed to fetch badges: ${badgesError.message}`);
+      }
+      
+      console.log(`Recuperati ${data?.length || 0} badges dalla tabella 'badges'`);
+      return (data || []).map(badge => formatDates(this._mapDbBadgeToSchema(badge)));
+    }
   }
 
   async getBadge(id: number): Promise<Badge | undefined> {
+    // Prima tentiamo con la tabella 'flt_game_badges'
+    try {
+      const { data, error } = await supabase
+        .from('flt_game_badges')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (!error && data) {
+        console.log(`Badge con ID ${id} recuperato da 'flt_game_badges'`);
+        return formatDates(this._mapDbBadgeToSchema(data));
+      }
+    } catch (error) {
+      console.log(`Errore nel recuperare badge ID ${id} da 'flt_game_badges': ${error}`);
+    }
+    
+    // Se non trovato, tentiamo con la tabella 'badges'
+    console.log(`Fallback: tentativo di recuperare badge ID ${id} dalla tabella 'badges'...`);
     const { data, error } = await supabase
       .from('badges')
       .select('*')
       .eq('id', id)
       .single();
     
-    if (error || !data) return undefined;
+    if (error || !data) {
+      console.log(`Badge ID ${id} non trovato in nessuna tabella`);
+      return undefined;
+    }
+    
+    console.log(`Badge con ID ${id} recuperato da 'badges'`);
     return formatDates(this._mapDbBadgeToSchema(data));
   }
 
@@ -334,14 +381,39 @@ export class SupabaseStorage implements IStorage {
     // Convert to DB format
     const dbBadge = this._mapSchemaBadgeToDb(badge);
     
-    const { data, error } = await supabase
-      .from('badges')
-      .insert([dbBadge])
-      .select()
-      .single();
-    
-    if (error) throw new Error(`Failed to create badge: ${error.message}`);
-    return formatDates(this._mapDbBadgeToSchema(data));
+    // Tentiamo di inserire nella tabella 'flt_game_badges'
+    try {
+      console.log("Tentativo di inserire badge in 'flt_game_badges'...");
+      const { data, error } = await supabase
+        .from('flt_game_badges')
+        .insert([dbBadge])
+        .select()
+        .single();
+      
+      if (error) {
+        console.log(`Errore nell'inserire badge in 'flt_game_badges': ${error.message}`);
+        throw error;
+      }
+      
+      console.log("Badge inserito con successo in 'flt_game_badges'");
+      return formatDates(this._mapDbBadgeToSchema(data));
+    } catch (error) {
+      // Se fallisce, tentiamo di inserire nella tabella 'badges'
+      console.log("Fallback: tentativo di inserire badge nella tabella 'badges'...");
+      const { data, error: badgesError } = await supabase
+        .from('badges')
+        .insert([dbBadge])
+        .select()
+        .single();
+      
+      if (badgesError) {
+        console.error(`Fallimento completo nell'inserire badge: ${badgesError.message}`);
+        throw new Error(`Failed to create badge: ${badgesError.message}`);
+      }
+      
+      console.log("Badge inserito con successo in 'badges'");
+      return formatDates(this._mapDbBadgeToSchema(data));
+    }
   }
 
   // === Reward operations ===
@@ -431,12 +503,37 @@ export class SupabaseStorage implements IStorage {
     
     const badgeIds = gameBadgeRelations.map(rel => rel.badge_id);
     
-    const { data: badgeList } = await supabase
-      .from('badges')
-      .select('*')
-      .in('id', badgeIds);
-    
-    return (badgeList || []).map(badge => formatDates(this._mapDbBadgeToSchema(badge)));
+    // Prima proviamo a recuperare le badge dalla tabella 'flt_game_badges'
+    try {
+      console.log(`Tentativo di recuperare ${badgeIds.length} badges da 'flt_game_badges'...`);
+      const { data: badgeList, error } = await supabase
+        .from('flt_game_badges')
+        .select('*')
+        .in('id', badgeIds);
+      
+      if (error) {
+        console.log(`Errore nel recuperare badges da 'flt_game_badges': ${error.message}`);
+        throw error;
+      }
+      
+      console.log(`Recuperati ${badgeList?.length || 0} badges dalla tabella 'flt_game_badges'`);
+      return (badgeList || []).map(badge => formatDates(this._mapDbBadgeToSchema(badge)));
+    } catch (error) {
+      // Se fallisce, tentiamo con la tabella 'badges'
+      console.log(`Fallback: tentativo di recuperare badges dalla tabella 'badges'...`);
+      const { data: badgeList, error: badgesError } = await supabase
+        .from('badges')
+        .select('*')
+        .in('id', badgeIds);
+      
+      if (badgesError) {
+        console.error(`Fallimento completo nel recuperare badges: ${badgesError.message}`);
+        throw new Error(`Failed to fetch badges: ${badgesError.message}`);
+      }
+      
+      console.log(`Recuperati ${badgeList?.length || 0} badges dalla tabella 'badges'`);
+      return (badgeList || []).map(badge => formatDates(this._mapDbBadgeToSchema(badge)));
+    }
   }
 
   async assignBadgeToGame(gameBadge: InsertGameBadge): Promise<GameBadge> {
