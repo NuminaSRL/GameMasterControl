@@ -23,26 +23,57 @@ Crea un file `.env` nella radice del progetto (o aggiorna quello esistente) con 
 SUPABASE_URL=https://tuo-progetto.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... (la tua chiave anonima)
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... (la tua chiave di servizio)
+FELTRINELLI_API_URL=https://url-api-feltrinelli.it (opzionale per integrazione diretta)
 ```
 
 ### 2. Impostazione delle Tabelle in Supabase
 
 Puoi creare le tabelle necessarie in Supabase in due modi:
 
-#### Opzione A: Utilizzando l'SQL Editor di Supabase
+#### Opzione A: Utilizzando l'SQL Editor di Supabase (consigliato)
 
 1. Accedi al pannello di controllo di Supabase
 2. Vai alla sezione "SQL Editor"
 3. Crea una nuova query
-4. Copia e incolla il contenuto del file `feltrinelli_data_import.sql` 
-5. Esegui la query per creare tutte le tabelle necessarie
+4. Copia e incolla il contenuto del file `update_tables.sql` per aggiornare le tabelle esistenti
+5. Esegui la query per creare/aggiornare tutte le tabelle necessarie
 
-#### Opzione B: Esecuzione degli Script di Migrazione
+#### Opzione B: Esecuzione manuale dell'SQL per creare o aggiornare le tabelle
 
-Esegui il seguente comando nel terminale per applicare la migrazione:
+Esegui le seguenti query per aggiornare la struttura delle tabelle con i nuovi campi:
 
-```bash
-npm run db:push
+```sql
+-- Aggiorna la tabella dei giochi con i campi data inizio e fine
+ALTER TABLE flt_games
+ADD COLUMN IF NOT EXISTS start_date TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS end_date TIMESTAMP WITH TIME ZONE;
+
+-- Aggiorna le impostazioni di gioco con il campo difficoltà
+ALTER TABLE flt_game_settings
+ADD COLUMN IF NOT EXISTS difficulty INTEGER DEFAULT 1;
+
+-- Crea o aggiorna la tabella dei premi
+CREATE TABLE IF NOT EXISTS flt_rewards (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  type VARCHAR(100),
+  value VARCHAR(255),
+  icon VARCHAR(255),
+  color VARCHAR(50),
+  available INTEGER DEFAULT 0,
+  image_url TEXT,
+  is_active BOOLEAN DEFAULT TRUE,
+  start_date TIMESTAMP WITH TIME ZONE,
+  end_date TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  rank INTEGER DEFAULT 0
+);
+
+-- Crea o aggiorna indici
+CREATE INDEX IF NOT EXISTS idx_flt_rewards_is_active ON flt_rewards(is_active);
+CREATE INDEX IF NOT EXISTS idx_flt_games_start_end_date ON flt_games(start_date, end_date);
 ```
 
 ### 3. Configurazione del Provider di Storage
