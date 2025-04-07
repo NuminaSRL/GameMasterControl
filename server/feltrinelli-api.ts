@@ -81,9 +81,9 @@ interface Reward {
 
 // Configurazione base
 const API_BASE_URL = process.env.FELTRINELLI_API_URL || 'http://localhost:3000';
-// Rimuoviamo il doppio '/api' se è già incluso nell'URL
+// Rimuoviamo '/api' dalla fine dell'URL per evitare il doppio prefisso
 const CLEAN_API_URL = API_BASE_URL.endsWith('/api') 
-  ? API_BASE_URL 
+  ? API_BASE_URL.slice(0, -4)  // Rimuove '/api' dalla fine
   : API_BASE_URL;
 
 export const GAME_IDS = {
