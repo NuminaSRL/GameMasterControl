@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
 import Games from "@/pages/Games";
+import Badges from "@/pages/Badges";
+import Rewards from "@/pages/Rewards";
 import FeltrinelliApiTest from "@/pages/FeltrinelliApiTest";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
@@ -19,6 +21,8 @@ function AppContent() {
           <Switch>
             <Route path="/" component={Dashboard} />
             <Route path="/games" component={Games} />
+            <Route path="/badges" component={Badges} />
+            <Route path="/rewards" component={Rewards} />
             <Route path="/api-test" component={FeltrinelliApiTest} />
             <Route component={NotFound} />
           </Switch>
