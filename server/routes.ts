@@ -354,6 +354,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Ottieni tutti i badges disponibili
   app.get('/api/feltrinelli/badges', fltSimpleApi.getAllBadges);
   
+  // Ottieni un badge specifico tramite ID
+  app.get('/api/feltrinelli/badges/:id', fltSimpleApi.getFLTBadge);
+  
   // === NUOVI ENDPOINT PER PROFILI UTENTE CON REWARDS E BADGES ===
   
   // Ottieni profilo completo utente con rewards e badges

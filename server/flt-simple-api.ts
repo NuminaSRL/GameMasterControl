@@ -553,18 +553,125 @@ export async function getGameBadges(req: Request, res: Response) {
 // GET: Recupera tutti i badges disponibili
 export async function getAllBadges(req: Request, res: Response) {
   try {
-    const { data: badges, error } = await supabase
-      .from('badges')
-      .select('*')
-      .order('id', { ascending: true });
+    console.log("Tentativo di recuperare tutti i badges da Supabase...");
+    
+    // Prima proviamo con la tabella 'flt_game_badges'
+    let data;
+    let error;
+    
+    try {
+      const result = await supabase
+        .from('flt_game_badges')
+        .select('*')
+        .order('id', { ascending: true });
+        
+      data = result.data;
+      error = result.error;
       
+      if (!error && data) {
+        console.log(`Recuperati ${data.length} badges dalla tabella 'flt_game_badges'`);
+      }
+    } catch (err) {
+      console.log("Errore cercando in 'flt_game_badges', proverò con 'badges'");
+      
+      // Se fallisce, proviamo con 'badges'
+      const result = await supabase
+        .from('badges')
+        .select('*')
+        .order('id', { ascending: true });
+        
+      data = result.data;
+      error = result.error;
+      
+      if (!error && data) {
+        console.log(`Recuperati ${data.length} badges dalla tabella 'badges'`);
+      }
+    }
+    
     if (error) throw error;
     
-    return res.json(badges);
+    return res.json(data || []);
   } catch (error) {
     console.error("Error getting badges:", error);
     return res.status(500).json({ 
       error: "Failed to get badges", 
+      message: error instanceof Error ? error.message : "Unknown error" 
+    });
+  }
+}
+
+// GET: Recupera un badge specifico tramite ID
+export async function getFLTBadge(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ 
+        error: "Bad Request", 
+        message: "L'ID del badge è obbligatorio" 
+      });
+    }
+    
+    console.log(`Tentativo di recuperare il badge con ID: ${id} da Supabase...`);
+    
+    // Prima proviamo con la tabella 'flt_game_badges'
+    let badge;
+    let error;
+    
+    try {
+      const result = await supabase
+        .from('flt_game_badges')
+        .select('*')
+        .eq('id', id)
+        .single();
+        
+      badge = result.data;
+      error = result.error;
+      
+      if (!error && badge) {
+        console.log(`Badge trovato nella tabella 'flt_game_badges'`);
+        return res.json(badge);
+      }
+    } catch (err) {
+      console.log(`Errore cercando in 'flt_game_badges', proverò con 'badges'`);
+    }
+    
+    // Se non trovato o errore, proviamo con 'badges'
+    try {
+      const result = await supabase
+        .from('badges')
+        .select('*')
+        .eq('id', id)
+        .single();
+        
+      badge = result.data;
+      error = result.error;
+      
+      if (!error && badge) {
+        console.log(`Badge trovato nella tabella 'badges'`);
+        return res.json(badge);
+      }
+    } catch (err) {
+      console.log(`Badge non trovato in nessuna tabella`);
+    }
+    
+    // Se non è stato trovato in nessuna delle due tabelle
+    if (!badge || error) {
+      if (error?.message.includes('No rows found')) {
+        return res.status(404).json({ 
+          error: "Not Found", 
+          message: "Badge non trovato" 
+        });
+      }
+      
+      throw error || new Error('Badge non trovato');
+    }
+    
+    return res.json(badge);
+  } catch (error) {
+    console.error("Error getting badge:", error);
+    return res.status(500).json({ 
+      error: "Failed to get badge", 
       message: error instanceof Error ? error.message : "Unknown error" 
     });
   }
