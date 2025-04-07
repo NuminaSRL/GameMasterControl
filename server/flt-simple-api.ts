@@ -106,14 +106,42 @@ export async function createFLTUser(req: Request, res: Response) {
 // GET: Recupera tutti i giochi
 export async function getAllFLTGames(req: Request, res: Response) {
   try {
-    const { data: games, error } = await supabase
+    // Recupera solo i giochi attivi se richiesto
+    const activeOnly = req.query.active === 'true';
+    
+    let query = supabase
       .from('flt_games')
       .select('*')
       .order('created_at', { ascending: false });
+    
+    if (activeOnly) {
+      query = query.eq('is_active', true);
+      
+      // Aggiungi filtro per data di inizio e fine (se specificati)
+      const now = new Date().toISOString();
+      query = query.or(`start_date.is.null,start_date.lte.${now}`);
+      query = query.or(`end_date.is.null,end_date.gte.${now}`);
+    }
+    
+    const { data: games, error } = await query;
 
     if (error) throw error;
     
-    return res.json(games);
+    // Formatta la risposta per includere i nuovi campi
+    const formattedGames = games?.map(game => ({
+      id: game.id,
+      feltrinelli_id: game.feltrinelli_id,
+      internal_id: game.internal_id,
+      name: game.name,
+      description: game.description,
+      is_active: game.is_active,
+      start_date: game.start_date || null,
+      end_date: game.end_date || null,
+      created_at: game.created_at,
+      updated_at: game.updated_at
+    }));
+    
+    return res.json(formattedGames);
   } catch (error) {
     console.error("Error getting games:", error);
     return res.status(500).json({ error: "Failed to get games" });
@@ -351,6 +379,7 @@ export async function saveGameSettings(req: Request, res: Response) {
         .update({
           timeDuration: data.timeDuration,
           questionCount: data.questionCount,
+          difficulty: data.difficulty !== undefined ? data.difficulty : 1,
           active: data.active !== undefined ? data.active : true
         })
         .eq('game_id', gameId)
@@ -370,6 +399,7 @@ export async function saveGameSettings(req: Request, res: Response) {
         gameId: gameId,
         timeDuration: data.timeDuration || 30,
         questionCount: data.questionCount || 5,
+        difficulty: data.difficulty || 1,
         active: data.active !== undefined ? data.active : true
       });
       

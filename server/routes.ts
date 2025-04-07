@@ -1099,6 +1099,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           icon: reward.icon,
           color: reward.color,
           available: reward.available,
+          image_url: reward.image_url || null,
+          start_date: reward.start_date || null,
+          end_date: reward.end_date || null,
           created_at: reward.created_at
         })) || [];
         
@@ -1123,7 +1126,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Recupera i premi assegnati a questo utente
         const { data, error } = await supabase
           .from('flt_user_rewards')
-          .select('reward_id, awarded_at, flt_rewards(id, name, description, type, value, icon, color)')
+          .select('reward_id, awarded_at, flt_rewards(id, name, description, type, value, icon, color, image_url)')
           .eq('user_id', userId);
         
         if (error) throw error;
@@ -1137,6 +1140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           value: record.flt_rewards.value,
           icon: record.flt_rewards.icon,
           color: record.flt_rewards.color,
+          image_url: record.flt_rewards.image_url || null,
           awarded_at: record.awarded_at
         })) || [];
         
