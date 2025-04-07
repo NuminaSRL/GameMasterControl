@@ -81,6 +81,11 @@ interface Reward {
 
 // Configurazione base
 const API_BASE_URL = process.env.FELTRINELLI_API_URL || 'http://localhost:3000';
+// Rimuoviamo il doppio '/api' se è già incluso nell'URL
+const CLEAN_API_URL = API_BASE_URL.endsWith('/api') 
+  ? API_BASE_URL 
+  : API_BASE_URL;
+
 export const GAME_IDS = {
   BOOK_QUIZ: '00000000-0000-0000-0000-000000000001',
   AUTHOR_QUIZ: '00000000-0000-0000-0000-000000000002',
@@ -124,16 +129,16 @@ async function fetchWithErrorHandling<T>(url: string, options?: RequestInit): Pr
 // Funzioni per interagire con le API di Feltrinelli
 export async function healthCheck(): Promise<boolean> {
   try {
-    // La variabile API_BASE_URL già contiene '/api', quindi non dobbiamo ripeterlo
-    // Proviamo prima con '/health-check', se fallisce proviamo con '/health'
+    // Utilizziamo CLEAN_API_URL per evitare il doppio '/api'
+    // Proviamo prima con '/api/health-check', se fallisce proviamo con '/api/health'
     try {
-      console.log(`Attempting to connect to ${API_BASE_URL}/health-check`);
-      const response = await fetchWithErrorHandling<HealthResponse>(`${API_BASE_URL}/health-check`);
+      console.log(`Attempting to connect to ${CLEAN_API_URL}/api/health-check`);
+      const response = await fetchWithErrorHandling<HealthResponse>(`${CLEAN_API_URL}/api/health-check`);
       return (response as HealthResponse).status === 'ok';
     } catch (error) {
-      // Fallback a /health
-      console.log(`Fallback to ${API_BASE_URL}/health`);
-      const response = await fetchWithErrorHandling<HealthResponse>(`${API_BASE_URL}/health`);
+      // Fallback a /api/health
+      console.log(`Fallback to ${CLEAN_API_URL}/api/health`);
+      const response = await fetchWithErrorHandling<HealthResponse>(`${CLEAN_API_URL}/api/health`);
       return (response as HealthResponse).status === 'ok';
     }
   } catch (error) {
@@ -158,7 +163,7 @@ export async function createGameSession(userId: string, gameType: 'books' | 'aut
       break;
   }
   
-  return await fetchWithErrorHandling<GameSession>(`${API_BASE_URL}/games/session`, {
+  return await fetchWithErrorHandling<GameSession>(`${CLEAN_API_URL}/api/games/session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ user_id: userId, game_id: gameId })
@@ -167,7 +172,7 @@ export async function createGameSession(userId: string, gameType: 'books' | 'aut
 
 // Quiz Libri
 export async function getBookQuizQuestion(difficulty: number = 1): Promise<BookQuizQuestion> {
-  return await fetchWithErrorHandling<BookQuizQuestion>(`${API_BASE_URL}/games/bookquiz/question?difficulty=${difficulty}`);
+  return await fetchWithErrorHandling<BookQuizQuestion>(`${CLEAN_API_URL}/api/games/bookquiz/question?difficulty=${difficulty}`);
 }
 
 export async function submitBookQuizAnswer(
@@ -176,7 +181,7 @@ export async function submitBookQuizAnswer(
   answerOptionId: string, 
   timeTaken: number
 ): Promise<AnswerResult> {
-  return await fetchWithErrorHandling<AnswerResult>(`${API_BASE_URL}/games/bookquiz/answer`, {
+  return await fetchWithErrorHandling<AnswerResult>(`${CLEAN_API_URL}/api/games/bookquiz/answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -190,7 +195,7 @@ export async function submitBookQuizAnswer(
 
 // Quiz Autori
 export async function getAuthorQuizQuestion(difficulty: number = 1): Promise<AuthorQuizQuestion> {
-  return await fetchWithErrorHandling<AuthorQuizQuestion>(`${API_BASE_URL}/games/authorquiz/question?difficulty=${difficulty}`);
+  return await fetchWithErrorHandling<AuthorQuizQuestion>(`${CLEAN_API_URL}/api/games/authorquiz/question?difficulty=${difficulty}`);
 }
 
 export async function submitAuthorQuizAnswer(
@@ -199,7 +204,7 @@ export async function submitAuthorQuizAnswer(
   answerOptionId: string, 
   timeTaken: number
 ): Promise<AnswerResult> {
-  return await fetchWithErrorHandling<AnswerResult>(`${API_BASE_URL}/games/authorquiz/answer`, {
+  return await fetchWithErrorHandling<AnswerResult>(`${CLEAN_API_URL}/api/games/authorquiz/answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -213,7 +218,7 @@ export async function submitAuthorQuizAnswer(
 
 // Quiz Anni
 export async function getYearQuizQuestion(difficulty: number = 1): Promise<YearQuizQuestion> {
-  return await fetchWithErrorHandling<YearQuizQuestion>(`${API_BASE_URL}/games/yearquiz/question?difficulty=${difficulty}`);
+  return await fetchWithErrorHandling<YearQuizQuestion>(`${CLEAN_API_URL}/api/games/yearquiz/question?difficulty=${difficulty}`);
 }
 
 export async function submitYearQuizAnswer(
@@ -222,7 +227,7 @@ export async function submitYearQuizAnswer(
   answerYear: number, 
   timeTaken: number
 ): Promise<AnswerResult> {
-  return await fetchWithErrorHandling<AnswerResult>(`${API_BASE_URL}/games/yearquiz/answer`, {
+  return await fetchWithErrorHandling<AnswerResult>(`${CLEAN_API_URL}/api/games/yearquiz/answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -240,7 +245,7 @@ export async function getLeaderboard(
   limit: number = 10
 ): Promise<LeaderboardEntry[]> {
   const response = await fetchWithErrorHandling<LeaderboardResponse>(
-    `${API_BASE_URL}/leaderboard?period=${period}&limit=${limit}`
+    `${CLEAN_API_URL}/api/leaderboard?period=${period}&limit=${limit}`
   );
   return (response as LeaderboardResponse).data;
 }
@@ -251,7 +256,7 @@ export async function getGameLeaderboard(
   limit: number = 10
 ): Promise<LeaderboardEntry[]> {
   const response = await fetchWithErrorHandling<LeaderboardResponse>(
-    `${API_BASE_URL}/leaderboard/${gameId}?period=${period}&limit=${limit}`
+    `${CLEAN_API_URL}/api/leaderboard/${gameId}?period=${period}&limit=${limit}`
   );
   return (response as LeaderboardResponse).data;
 }
@@ -263,7 +268,7 @@ export async function submitScore(
   totalQuestions: number,
   sessionId: string
 ): Promise<{ success: boolean, message: string }> {
-  return await fetchWithErrorHandling<SubmitScoreResponse>(`${API_BASE_URL}/leaderboard/submit-all-periods`, {
+  return await fetchWithErrorHandling<SubmitScoreResponse>(`${CLEAN_API_URL}/api/leaderboard/submit-all-periods`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -282,13 +287,13 @@ export async function getAvailableRewards(
   period: 'all_time' | 'monthly' | 'weekly' = 'all_time'
 ): Promise<Reward[]> {
   const response = await fetchWithErrorHandling<RewardsResponse>(
-    `${API_BASE_URL}/rewards/available?game_id=${gameId}&period=${period}`
+    `${CLEAN_API_URL}/api/rewards/available?game_id=${gameId}&period=${period}`
   );
   return (response as RewardsResponse).rewards;
 }
 
 export async function getUserRewards(userId: string): Promise<Reward[]> {
-  const response = await fetchWithErrorHandling<RewardsResponse>(`${API_BASE_URL}/rewards/user/${userId}`);
+  const response = await fetchWithErrorHandling<RewardsResponse>(`${CLEAN_API_URL}/api/rewards/user/${userId}`);
   return (response as RewardsResponse).rewards;
 }
 
