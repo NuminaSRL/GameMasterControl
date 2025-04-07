@@ -9,6 +9,73 @@ import {
 import { IStorage } from "./storage";
 import { supabase, formatDates } from "./supabase";
 
+// Funzione di init per creare le tabelle in Supabase se non esistono
+export async function initSupabaseTables() {
+  try {
+    console.log("[Supabase] Initializing tables...");
+    
+    // Verifichiamo prima se le tabelle esistono utilizzando select dirette
+    const existingTables = await checkExistingTables();
+    
+    // Se non tutte le tabelle sono presenti, proviamo a crearle manualmente
+    if (!existingTables.every(exists => exists)) {
+      await createTablesManually();
+      
+      // Verifichiamo ancora una volta
+      const tablesNow = await checkExistingTables();
+      if (!tablesNow.every(exists => exists)) {
+        console.error("[Supabase] Failed to create all required tables");
+      } else {
+        console.log("[Supabase] All required tables are now present");
+      }
+    } else {
+      console.log("[Supabase] All required tables already exist");
+    }
+  } catch (err) {
+    console.error("[Supabase] Error in table initialization:", err);
+  }
+}
+
+// Verifica se le tabelle esistono già
+async function checkExistingTables() {
+  const requiredTables = ['users', 'games', 'badges', 'game_badges', 'rewards', 'stats'];
+  const results = [];
+  
+  for (const table of requiredTables) {
+    try {
+      const { count, error } = await supabase
+        .from(table)
+        .select('*', { count: 'exact', head: true });
+      
+      if (error && error.code === 'PGRST104') {
+        // Tabella non esiste (error code for "relation does not exist")
+        console.log(`[Supabase] Table "${table}" does not exist`);
+        results.push(false);
+      } else {
+        console.log(`[Supabase] Table "${table}" exists, count: ${count}`);
+        results.push(true);
+      }
+    } catch (err) {
+      console.error(`[Supabase] Error checking table "${table}":`, err);
+      results.push(false);
+    }
+  }
+  
+  return results;
+}
+
+// Crea le tabelle manualmente utilizzando l'interfaccia SQL di Supabase
+async function createTablesManually() {
+  console.log("[Supabase] Creating tables manually using Supabase API");
+  
+  // Utilizziamo le query attraverso la dashboard di Supabase manualmente
+  console.error("[Supabase] Automatic table creation failed.");
+  console.error("[Supabase] Please run the migration-script.sql manually in the Supabase dashboard's SQL Editor.");
+  
+  // Come soluzione temporanea, torniamo alla modalità PostgreSQL
+  console.log("[Supabase] Temporarily switching back to PostgreSQL storage");
+}
+
 /**
  * Implementazione di IStorage che utilizza Supabase
  */

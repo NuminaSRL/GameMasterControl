@@ -1,6 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { supabase } from "./supabase";
+import { storage } from "./storage"; 
+import { SupabaseStorage, initSupabaseTables } from "./supabase-storage";
 
 const app = express();
 app.use(express.json());
@@ -37,6 +40,30 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Verifica quale storage stiamo utilizzando
+  console.log('[Database]', storage instanceof SupabaseStorage 
+    ? 'Using Supabase for database connection' 
+    : 'Using PostgreSQL for database connection');
+  
+  // Se stiamo usando Supabase, inizializziamo le tabelle
+  if (storage instanceof SupabaseStorage) {
+    try {
+      // Prima inizializziamo le tabelle
+      await initSupabaseTables();
+      
+      // Poi verifichiamo se la tabella users esiste
+      const { data, error } = await supabase.from('users').select('*').limit(1);
+      
+      if (error) {
+        console.error('[Supabase] Connection error:', error.message);
+      } else {
+        console.log('[Supabase] Connection successful, users count:', data.length);
+      }
+    } catch (err) {
+      console.error('[Supabase] Error testing connection:', err);
+    }
+  }
+  
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

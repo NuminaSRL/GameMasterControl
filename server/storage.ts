@@ -324,9 +324,9 @@ export class DatabaseStorage implements IStorage {
 }
 
 // Scegli l'implementazione da utilizzare
-// Temporaneamente forziamo l'uso di DatabaseStorage mentre completiamo la migrazione a Supabase
-const useSupabase = false; // Forzato a false durante la migrazione
-// const useSupabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Per ora, utilizziamo temporaneamente la versione PostgreSQL locale
+// finché non riusciamo a configurare Supabase correttamente
+const useSupabase = false; // Temporaneamente forzato a false
 
 // Esporta la classe storage appropriata
 export const storage: IStorage = useSupabase 
