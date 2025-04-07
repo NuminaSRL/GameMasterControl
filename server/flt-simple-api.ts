@@ -127,7 +127,7 @@ export async function getFLTGame(req: Request, res: Response) {
     
     const { data: game, error } = await supabase
       .from('FLT_games')
-      .select('*, game_settings(*)') // include le impostazioni del gioco
+      .select('*, flt_game_settings(*)') // include le impostazioni del gioco
       .eq('id', id)
       .single();
     
@@ -173,7 +173,7 @@ export async function createFLTGame(req: Request, res: Response) {
       });
       
       const { error: settingsError } = await supabase
-        .from('game_settings')
+        .from('flt_game_settings')
         .insert([settingsData]);
       
       if (settingsError) throw settingsError;
@@ -209,7 +209,7 @@ export async function updateFLTGame(req: Request, res: Response) {
     // Se sono fornite le impostazioni, le aggiorniamo
     if (data.settings) {
       const { data: existingSettings } = await supabase
-        .from('game_settings')
+        .from('flt_game_settings')
         .select('*')
         .eq('game_id', id)
         .single();
@@ -217,7 +217,7 @@ export async function updateFLTGame(req: Request, res: Response) {
       if (existingSettings) {
         // Aggiorna le impostazioni esistenti
         const { error: settingsError } = await supabase
-          .from('game_settings')
+          .from('flt_game_settings')
           .update({
             timeDuration: data.settings.timeDuration,
             questionCount: data.settings.questionCount
@@ -234,7 +234,7 @@ export async function updateFLTGame(req: Request, res: Response) {
         });
         
         const { error: settingsError } = await supabase
-          .from('game_settings')
+          .from('flt_game_settings')
           .insert([validatedData]);
         
         if (settingsError) throw settingsError;
@@ -290,7 +290,7 @@ export async function toggleFLTGameStatus(req: Request, res: Response) {
   }
 }
 
-// ===== API per tabella game_settings =====
+// ===== API per tabella flt_game_settings =====
 
 // GET: Recupera le impostazioni di un gioco
 export async function getGameSettings(req: Request, res: Response) {
@@ -298,7 +298,7 @@ export async function getGameSettings(req: Request, res: Response) {
     const { gameId } = req.params;
     
     const { data: settings, error } = await supabase
-      .from('game_settings')
+      .from('flt_game_settings')
       .select('*')
       .eq('game_id', gameId)
       .single();
@@ -339,7 +339,7 @@ export async function saveGameSettings(req: Request, res: Response) {
     
     // Verifica se esistono già impostazioni per questo gioco
     const { data: existingSettings, error: settingsError } = await supabase
-      .from('game_settings')
+      .from('flt_game_settings')
       .select('*')
       .eq('game_id', gameId)
       .single();
@@ -347,7 +347,7 @@ export async function saveGameSettings(req: Request, res: Response) {
     if (existingSettings) {
       // Aggiorna le impostazioni esistenti
       const { data: updatedSettings, error } = await supabase
-        .from('game_settings')
+        .from('flt_game_settings')
         .update({
           timeDuration: data.timeDuration,
           questionCount: data.questionCount,
@@ -374,7 +374,7 @@ export async function saveGameSettings(req: Request, res: Response) {
       });
       
       const { data: newSettings, error } = await supabase
-        .from('game_settings')
+        .from('flt_game_settings')
         .insert([validatedData])
         .select()
         .single();

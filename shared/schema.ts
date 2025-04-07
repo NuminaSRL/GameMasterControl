@@ -185,8 +185,8 @@ export const insertFLTGameSchema = createInsertSchema(FLT_games).omit({
   updatedAt: true
 });
 
-// Tabella per le impostazioni dei giochi
-export const gameSettings = pgTable("game_settings", {
+// Tabella per le impostazioni dei giochi Feltrinelli
+export const gameSettings = pgTable("flt_game_settings", {
   id: uuid("id").primaryKey(),
   gameId: uuid("game_id").notNull().references(() => FLT_games.id),
   timeDuration: integer("time_duration").notNull().default(30),

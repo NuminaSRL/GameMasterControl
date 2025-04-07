@@ -871,7 +871,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/flt/games/:id', fltSimpleApi.updateFLTGame);
   app.post('/api/flt/games/:id/toggle', fltSimpleApi.toggleFLTGameStatus);
   
-  // API per game_settings
+  // API per tabella flt_game_settings
   app.get('/api/flt/game-settings/:gameId', fltSimpleApi.getGameSettings);
   app.post('/api/flt/game-settings/:gameId', fltSimpleApi.saveGameSettings);
   
