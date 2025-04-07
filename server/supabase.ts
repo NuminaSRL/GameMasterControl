@@ -6,8 +6,13 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.SUPABASE_URL as string;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
 
+// Verifica se le variabili d'ambiente sono configurate
 if (!supabaseUrl || !supabaseKey) {
-  console.error('⚠️ Supabase URL e Service Role Key sono necessari!');
+  console.warn('⚠️ Supabase URL o Service Role Key mancanti');
+  console.warn('Per utilizzare Supabase, aggiungi queste variabili nel file .env:');
+  console.warn('SUPABASE_URL=https://tuo-progetto.supabase.co');
+  console.warn('SUPABASE_SERVICE_ROLE_KEY=supabase_service_role_key');
+  console.warn('In alternativa, configura solo DATABASE_URL per usare PostgreSQL locale');
 }
 
 // Crea un singolo client per l'intera applicazione lato server

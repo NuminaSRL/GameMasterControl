@@ -4,6 +4,37 @@ import { setupVite, serveStatic, log } from "./vite";
 import { supabase } from "./supabase";
 import { storage } from "./storage"; 
 import { SupabaseStorage, initSupabaseTables } from "./supabase-storage";
+import fs from "fs";
+import path from "path";
+
+// Carica variabili d'ambiente dal file .env se esiste (per ambiente locale)
+try {
+  const envPath = path.join(process.cwd(), '.env');
+  if (fs.existsSync(envPath)) {
+    console.log('[Config] Loading environment variables from .env file');
+    const envConfig = fs.readFileSync(envPath, 'utf8')
+      .split('\n')
+      .filter(line => line.trim() && !line.startsWith('#'))
+      .map(line => line.split('=').map(part => part.trim()));
+    
+    for (const [key, value] of envConfig) {
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
+    }
+  }
+} catch (err) {
+  console.warn('[Config] Error loading .env file, will use existing environment variables', err);
+}
+
+// Verifica che le variabili d'ambiente necessarie siano presenti
+const requiredEnvVars = ['DATABASE_URL'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+  console.error(`[Config] Missing required environment variables: ${missingVars.join(', ')}`);
+  console.error('[Config] Please create a .env file in the project root with the missing variables');
+}
 
 const app = express();
 app.use(express.json());

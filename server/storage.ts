@@ -329,7 +329,32 @@ export class DatabaseStorage implements IStorage {
 // il file migration-script.sql nell'SQL Editor della dashboard di Supabase
 const useSupabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// Variabile che determina quale storage usare
+// Se è presente solo DATABASE_URL, usa DatabaseStorage
+// Se sono presenti SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY, usa SupabaseStorage
+// Di default, usa DatabaseStorage se nessuna variabile è configurata
+
+let selectedStorage: IStorage;
+
+try {
+  if (useSupabase) {
+    console.log('Configurando Supabase Storage...');
+    selectedStorage = new SupabaseStorage();
+    console.log('Supabase Storage configurato correttamente');
+  } else if (process.env.DATABASE_URL) {
+    console.log('Configurando Database Storage con PostgreSQL...');
+    selectedStorage = new DatabaseStorage();
+    console.log('Database Storage configurato correttamente');
+  } else {
+    console.warn('Nessuna variabile d\'ambiente di connessione al database trovata');
+    console.warn('Utilizzando Database Storage con connessione di default');
+    selectedStorage = new DatabaseStorage();
+  }
+} catch (error) {
+  console.error('Errore nella configurazione dello storage:', error);
+  console.warn('Ripiegando su Database Storage...');
+  selectedStorage = new DatabaseStorage();
+}
+
 // Esporta la classe storage appropriata
-export const storage: IStorage = useSupabase 
-  ? new SupabaseStorage() 
-  : new DatabaseStorage();
+export const storage: IStorage = selectedStorage;
