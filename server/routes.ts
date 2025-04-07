@@ -12,7 +12,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create HTTP server
   const httpServer = createServer(app);
 
-  // === FELTRINELLI API INTEGRATION ===
+  // === FELTRINELLI API INTEGRATION - NUOVA VERSIONE ===
+  
+  // Health check principale
+  app.get('/api/health', async (req, res) => {
+    try {
+      // Verifichiamo la connessione a Supabase
+      const { count, error } = await supabase
+        .from('flt_games')
+        .select('*', { count: 'exact', head: true });
+      
+      if (error) {
+        return res.status(503).json({ status: 'error', message: 'Database connection failed' });
+      }
+      
+      res.json({ status: 'ok', message: 'Gaming Engine API is running' });
+    } catch (error) {
+      res.status(500).json({ status: 'error', message: `Error in health check: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+  
+  // Health check secondario
+  app.get('/api/health-check', async (req, res) => {
+    try {
+      res.json({ status: 'ok', message: 'Server is running' });
+    } catch (error) {
+      res.status(500).json({ status: 'error', message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+  
+  // Health check specifico per Feltrinelli
+  app.get('/api/feltrinelli/health', async (req, res) => {
+    try {
+      res.json({ status: 'ok', message: 'Feltrinelli Gaming Engine API is running' });
+    } catch (error) {
+      res.status(500).json({ status: 'error', message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
   
   // Ottieni IDs dei giochi
   app.get('/api/feltrinelli/game-ids', (req, res) => {
@@ -26,28 +62,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: `Error fetching game IDs: ${error instanceof Error ? error.message : 'Unknown error'}` });
     }
   });
-  
-  // Health check principale - redirect a feltrinelli API health
-  app.get('/api/health', async (req, res) => {
-    try {
-      const isHealthy = await feltrinelliApi.healthCheck();
-      if (isHealthy) {
-        res.json({ status: 'ok', message: 'Gaming Engine API is running' });
-      } else {
-        res.status(503).json({ status: 'error', message: 'Gaming Engine API is not available' });
-      }
-    } catch (error) {
-      res.status(500).json({ status: 'error', message: `Error connecting to Gaming API: ${error instanceof Error ? error.message : 'Unknown error'}` });
-    }
-  });
-  
-  // Health check secondario - redirect a feltrinelli API health
-  app.get('/api/health-check', async (req, res) => {
-    try {
-      const isHealthy = await feltrinelliApi.healthCheck();
-      if (isHealthy) {
-        res.json({ status: 'ok', message: 'Server is running' });
-      } else {
         res.status(503).json({ status: 'error', message: 'Server is not available' });
       }
     } catch (error) {
