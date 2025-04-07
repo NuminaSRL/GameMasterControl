@@ -52,13 +52,27 @@ export default function RewardsPage() {
   const getRewardIcon = (rank: number) => {
     switch (rank) {
       case 1:
-        return <Trophy className="h-6 w-6 text-yellow-500" />;
+        return <Trophy className="h-10 w-10 text-yellow-500" />;
       case 2:
-        return <Award className="h-6 w-6 text-gray-400" />;
+        return <Award className="h-10 w-10 text-gray-400" />;
       case 3:
-        return <Award className="h-6 w-6 text-amber-700" />;
+        return <Award className="h-10 w-10 text-amber-700" />;
       default:
-        return <Gift className="h-6 w-6 text-blue-500" />;
+        return <Gift className="h-10 w-10 text-blue-500" />;
+    }
+  };
+  
+  // Get background color based on reward rank
+  const getRewardBgColor = (rank: number) => {
+    switch (rank) {
+      case 1:
+        return "bg-yellow-50";
+      case 2:
+        return "bg-gray-50";
+      case 3:
+        return "bg-amber-50";
+      default:
+        return "bg-blue-50";
     }
   };
 
@@ -170,19 +184,11 @@ export default function RewardsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredRewards.map((reward: Reward) => (
                     <Card key={reward.id} className="overflow-hidden">
-                      <div className="relative h-48 bg-gray-100">
-                        {reward.image_url ? (
-                          <img
-                            src={reward.image_url}
-                            alt={reward.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            {getRewardIcon(reward.rank)}
-                            <span className="ml-2 text-muted-foreground">Nessuna immagine</span>
-                          </div>
-                        )}
+                      <div className={`relative h-48 ${getRewardBgColor(reward.rank)} flex flex-col items-center justify-center`}>
+                        <div className={`mb-2 p-4 rounded-full ${reward.rank === 1 ? 'bg-yellow-100' : reward.rank === 2 ? 'bg-gray-200' : reward.rank === 3 ? 'bg-amber-100' : 'bg-blue-100'}`}>
+                          {getRewardIcon(reward.rank)}
+                        </div>
+                        <p className="text-lg font-medium">{reward.name}</p>
                         <div className="absolute top-2 right-2 bg-primary text-white py-1 px-3 rounded-full text-xs font-medium">
                           {reward.rank <= 3 ? `${reward.rank}° posto` : `Top ${reward.rank}`}
                         </div>
