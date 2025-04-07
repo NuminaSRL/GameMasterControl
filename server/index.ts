@@ -40,6 +40,35 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Configurazione CORS per consentire richieste cross-origin dal frontend
+app.use((req, res, next) => {
+  // Imposta gli header CORS
+  const allowedOrigins = [
+    'https://your-vercel-app-url.vercel.app', // Sostituire con il tuo dominio Vercel
+    'http://localhost:3000',                 // Per sviluppo locale
+    'http://localhost:5000'                  // Per sviluppo monolitico
+  ];
+  
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    // Consenti a tutti in produzione - da restringere in base ai tuoi requisiti
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
+  // Gestisci le richieste OPTIONS preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;

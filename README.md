@@ -8,6 +8,7 @@ Un moderno pannello di controllo per la gestione di giochi basati su quiz letter
 - Frontend: React, Vite, Tailwind CSS
 - Database: Supabase (o PostgreSQL locale)
 - API esterne: Feltrinelli Gaming API
+- Deployment: Railway (backend), Vercel (frontend)
 
 ## Requisiti
 
