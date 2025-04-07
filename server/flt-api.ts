@@ -668,49 +668,44 @@ export async function importFeltrinelliUserProfile(req: Request, res: Response) 
   try {
     const schema = z.object({
       user_id: z.string().uuid(),
-      username: z.string(),
-      email: z.string().email(),
+      username: z.string().optional(),
+      email: z.string().email().optional(),
       avatar_url: z.string().optional()
     });
 
     const validatedData = schema.parse(req.body);
-    const { user_id, username, email, avatar_url } = validatedData;
+    const { user_id } = validatedData;
 
-    // Verifica se l'utente esiste già
-    const existingProfile = await db.query.fltUserProfiles.findFirst({
-      where: eq(fltUserProfiles.userId, user_id)
-    });
+    // Verifica se esiste già nel semplice formato richiesto
+    const { data: existingProfile, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('user_id', user_id)
+      .single();
 
     if (existingProfile) {
-      // Aggiorna il profilo esistente
-      await db.update(fltUserProfiles)
-        .set({ 
-          username,
-          email,
-          avatarUrl: avatar_url,
-          updatedAt: new Date()
-        })
-        .where(eq(fltUserProfiles.id, existingProfile.id));
-
+      // Il profilo esiste già, restituisci l'ID
       return res.json({
         success: true,
-        message: "User profile updated successfully",
+        message: "User profile already exists",
         profile_id: existingProfile.id
       });
     }
 
-    // Crea un nuovo profilo
-    const newProfile: InsertFltUserProfile = {
-      id: crypto.randomUUID(),
-      userId: user_id,
-      username,
-      email,
-      avatarUrl: avatar_url
-    };
+    // Crea un nuovo profilo semplificato
+    const { data: insertedProfile, error: insertError } = await supabase
+      .from('user_profiles')
+      .insert([{
+        id: crypto.randomUUID(),
+        user_id: user_id
+      }])
+      .select()
+      .single();
 
-    const [insertedProfile] = await db.insert(fltUserProfiles)
-      .values(newProfile)
-      .returning();
+    if (insertError) {
+      console.error("Error inserting user profile:", insertError);
+      return res.status(500).json({ error: "Failed to import user profile" });
+    }
 
     return res.status(201).json({
       success: true,
