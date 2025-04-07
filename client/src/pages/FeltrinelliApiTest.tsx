@@ -66,11 +66,12 @@ export default function FeltrinelliApiTest() {
     setIsLoading(true);
     setError(null);
     try {
+      // Utilizziamo un UUID valido come richiesto dall'API Feltrinelli
       const result = await apiRequest(
         '/api/games/session', 
         'POST', 
         {
-          user_id: 'test-user-id',
+          user_id: '00000000-0000-0000-0000-000000000099', // UUID formato valido per test
           game_id: '00000000-0000-0000-0000-000000000001' // Quiz libri
         }
       );

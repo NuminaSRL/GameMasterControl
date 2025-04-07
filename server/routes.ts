@@ -75,6 +75,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'user_id is required' });
       }
       
+      // Verifichiamo che l'user_id sia in formato UUID
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(user_id)) {
+        return res.status(400).json({ 
+          message: 'user_id deve essere in formato UUID (es. 00000000-0000-0000-0000-000000000099)' 
+        });
+      }
+      
       // Determiniamo il tipo di gioco dal game_id
       let gameType: 'books' | 'authors' | 'years' = 'books'; // default
       
@@ -102,6 +110,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!['books', 'authors', 'years'].includes(gameType)) {
         return res.status(400).json({ message: 'gameType must be one of: books, authors, years' });
+      }
+      
+      // Verifichiamo che l'userId sia in formato UUID
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(userId)) {
+        return res.status(400).json({ 
+          message: 'userId deve essere in formato UUID (es. 00000000-0000-0000-0000-000000000099)' 
+        });
       }
       
       const session = await feltrinelliApi.createGameSession(userId, gameType as 'books' | 'authors' | 'years');
