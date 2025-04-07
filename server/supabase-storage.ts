@@ -68,12 +68,48 @@ async function checkExistingTables() {
 async function createTablesManually() {
   console.log("[Supabase] Creating tables manually using Supabase API");
   
-  // Utilizziamo le query attraverso la dashboard di Supabase manualmente
-  console.error("[Supabase] Automatic table creation failed.");
-  console.error("[Supabase] Please run the migration-script.sql manually in the Supabase dashboard's SQL Editor.");
-  
-  // Come soluzione temporanea, torniamo alla modalità PostgreSQL
-  console.log("[Supabase] Temporarily switching back to PostgreSQL storage");
+  try {
+    // Crea la tabella users se non esiste
+    const createUsers = await supabase.rpc('create_users_table_if_not_exists');
+    console.log("[Supabase] Users table created or verified");
+    
+    // Crea la tabella games se non esiste
+    const createGames = await supabase.rpc('create_games_table_if_not_exists');
+    console.log("[Supabase] Games table created or verified");
+    
+    // Crea la tabella badges se non esiste
+    const createBadges = await supabase.rpc('create_badges_table_if_not_exists');
+    console.log("[Supabase] Badges table created or verified");
+    
+    // Crea la tabella game_badges se non esiste
+    const createGameBadges = await supabase.rpc('create_game_badges_table_if_not_exists');
+    console.log("[Supabase] Game_badges table created or verified");
+    
+    // Crea la tabella rewards se non esiste
+    const createRewards = await supabase.rpc('create_rewards_table_if_not_exists');
+    console.log("[Supabase] Rewards table created or verified");
+    
+    // Crea la tabella stats se non esiste
+    const createStats = await supabase.rpc('create_stats_table_if_not_exists');
+    console.log("[Supabase] Stats table created or verified");
+    
+    // Verifica se esistono gli RPC
+    if (createUsers.error || createGames.error || createBadges.error || 
+        createGameBadges.error || createRewards.error || createStats.error) {
+      console.error("[Supabase] Some RPC function not found. Please create stored procedures in Supabase");
+      // Come soluzione temporanea, torniamo alla modalità PostgreSQL
+      console.log("[Supabase] Temporarily switching back to PostgreSQL storage");
+    } else {
+      console.log("[Supabase] All tables created successfully");
+    }
+  } catch (error) {
+    console.error("[Supabase] Error during table creation:", error);
+    console.error("[Supabase] Automatic table creation failed.");
+    console.error("[Supabase] Please run the migration-script.sql manually in the Supabase dashboard's SQL Editor.");
+    
+    // Come soluzione temporanea, torniamo alla modalità PostgreSQL
+    console.log("[Supabase] Temporarily switching back to PostgreSQL storage");
+  }
 }
 
 /**

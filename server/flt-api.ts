@@ -728,6 +728,9 @@ export async function initFeltrinelliTables() {
   try {
     console.log("Inizializzazione tabelle Feltrinelli");
     
+    // Crea le tabelle Feltrinelli se non esistono
+    await createFeltrinelliTables();
+    
     // Verifica se non ci sono giochi mappati e crea mappature predefinite
     const existingMappings = await db.query.fltGames.findMany();
     
@@ -786,5 +789,93 @@ export async function initFeltrinelliTables() {
     console.log("Inizializzazione completata");
   } catch (error) {
     console.error("Errore durante l'inizializzazione delle tabelle Feltrinelli:", error);
+  }
+}
+
+// Funzione per creare le tabelle Feltrinelli
+async function createFeltrinelliTables() {
+  try {
+    // Usa Supabase per creare le tabelle
+    const createFltGames = await supabase
+      .from('flt_games')
+      .select('id')
+      .limit(1);
+    
+    if (createFltGames.error && createFltGames.error.message.includes('relation "flt_games" does not exist')) {
+      await supabase.rpc('create_flt_games_table');
+      console.log("Tabella flt_games creata");
+    } else {
+      console.log("Tabella flt_games già esistente");
+    }
+
+    // Tabella flt_game_sessions
+    const createFltGameSessions = await supabase
+      .from('flt_game_sessions')
+      .select('id')
+      .limit(1);
+    
+    if (createFltGameSessions.error && createFltGameSessions.error.message.includes('relation "flt_game_sessions" does not exist')) {
+      await supabase.rpc('create_flt_game_sessions_table');
+      console.log("Tabella flt_game_sessions creata");
+    } else {
+      console.log("Tabella flt_game_sessions già esistente");
+    }
+
+    // Tabella flt_user_profiles
+    const createFltUserProfiles = await supabase
+      .from('flt_user_profiles')
+      .select('id')
+      .limit(1);
+    
+    if (createFltUserProfiles.error && createFltUserProfiles.error.message.includes('relation "flt_user_profiles" does not exist')) {
+      await supabase.rpc('create_flt_user_profiles_table');
+      console.log("Tabella flt_user_profiles creata");
+    } else {
+      console.log("Tabella flt_user_profiles già esistente");
+    }
+
+    // Tabella flt_answer_options
+    const createFltAnswerOptions = await supabase
+      .from('flt_answer_options')
+      .select('id')
+      .limit(1);
+    
+    if (createFltAnswerOptions.error && createFltAnswerOptions.error.message.includes('relation "flt_answer_options" does not exist')) {
+      await supabase.rpc('create_flt_answer_options_table');
+      console.log("Tabella flt_answer_options creata");
+    } else {
+      console.log("Tabella flt_answer_options già esistente");
+    }
+
+    // Tabella flt_leaderboard
+    const createFltLeaderboard = await supabase
+      .from('flt_leaderboard')
+      .select('id')
+      .limit(1);
+    
+    if (createFltLeaderboard.error && createFltLeaderboard.error.message.includes('relation "flt_leaderboard" does not exist')) {
+      await supabase.rpc('create_flt_leaderboard_table');
+      console.log("Tabella flt_leaderboard creata");
+    } else {
+      console.log("Tabella flt_leaderboard già esistente");
+    }
+
+    // Tabella flt_user_rewards
+    const createFltUserRewards = await supabase
+      .from('flt_user_rewards')
+      .select('id')
+      .limit(1);
+    
+    if (createFltUserRewards.error && createFltUserRewards.error.message.includes('relation "flt_user_rewards" does not exist')) {
+      await supabase.rpc('create_flt_user_rewards_table');
+      console.log("Tabella flt_user_rewards creata");
+    } else {
+      console.log("Tabella flt_user_rewards già esistente");
+    }
+
+    console.log("Verifica delle tabelle Feltrinelli completata");
+  } catch (error) {
+    console.error("Errore durante la creazione delle tabelle Feltrinelli:", error);
+    throw error;
   }
 }

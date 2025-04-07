@@ -4,7 +4,7 @@ import * as schema from '@shared/schema';
 
 // Create the database connection using regular PostgreSQL
 const connectionString = process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/postgres';
-const client = postgres(connectionString);
+const client = postgres(connectionString, { prepare: false });
 export const db = drizzle(client, { schema });
 
 // Questa connessione è utilizzata solo quando storage.ts usa DatabaseStorage
