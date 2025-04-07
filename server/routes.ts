@@ -488,6 +488,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: `Error fetching stats: ${error instanceof Error ? error.message : 'Unknown error'}` });
     }
   });
+  
+  // Update dashboard stats
+  app.put('/api/stats', async (req, res) => {
+    try {
+      const statsUpdate = req.body;
+      const updatedStats = await storage.updateStats(statsUpdate);
+      res.json(updatedStats);
+    } catch (error) {
+      res.status(500).json({ message: `Error updating stats: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
 
   return httpServer;
 }
