@@ -1,258 +1,260 @@
-import { useState } from "react";
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { Toaster } from "@/components/ui/toaster";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { apiRequest } from '@/lib/queryClient';
+
+// Tipo per il risultato dell'health check
+type HealthCheckResult = {
+  status: string;
+  message: string;
+};
+
+// Tipo per una domanda del quiz sui libri
+type BookQuizQuestion = {
+  question_id: string;
+  question_text: string;
+  abstract_snippet: string;
+  options: {
+    id: string;
+    title: string;
+    author: string;
+    image_url: string;
+  }[];
+};
+
+// Tipo per la risposta del quiz
+type AnswerResult = {
+  is_correct: boolean;
+  message: string;
+  points: number;
+  correct_book?: {
+    id: string;
+    title: string;
+    authors: string;
+    abstract: string;
+    image_url: string;
+  };
+};
 
 export default function FeltrinelliApiTest() {
-  const { toast } = useToast();
-  const [apiStatus, setApiStatus] = useState<string>("Sconosciuto");
-  const [loading, setLoading] = useState<boolean>(false);
-  const [apiResponse, setApiResponse] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<string>("health");
+  const [healthCheck, setHealthCheck] = useState<HealthCheckResult | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [bookQuestion, setBookQuestion] = useState<BookQuizQuestion | null>(null);
+  const [answerResult, setAnswerResult] = useState<AnswerResult | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
-  // Function to check API health
-  const checkApiHealth = async () => {
-    setLoading(true);
+  // Esegue l'health check
+  const runHealthCheck = async () => {
+    setIsLoading(true);
+    setError(null);
     try {
-      const response = await apiRequest<{status: string; message: string}>("/api/feltrinelli/health");
-      setApiStatus(response.status);
-      setApiResponse(response);
-      toast({
-        title: "Verifica API completata",
-        description: `Stato: ${response.status}`,
-        variant: response.status === "ok" ? "default" : "destructive",
-      });
-    } catch (error) {
-      setApiStatus("error");
-      setApiResponse({ error: "Impossibile connettersi alle API" });
-      toast({
-        title: "Errore di connessione",
-        description: "Impossibile connettersi alle API Feltrinelli",
-        variant: "destructive",
-      });
+      const result = await apiRequest<HealthCheckResult>('/api/health', 'GET');
+      setHealthCheck(result);
+    } catch (err) {
+      setError(`Errore durante l'health check: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  // Function to get book quiz question
-  const getBookQuizQuestion = async () => {
-    setLoading(true);
+  // Crea una nuova sessione di gioco
+  const createGameSession = async () => {
+    setIsLoading(true);
+    setError(null);
     try {
-      const response = await apiRequest("/api/feltrinelli/bookquiz/question");
-      setApiResponse(response);
-      toast({
-        title: "Domanda quiz libri ricevuta",
-        description: "Domanda caricata con successo",
-      });
-    } catch (error) {
-      setApiResponse({ error: "Impossibile ottenere la domanda del quiz" });
-      toast({
-        title: "Errore",
-        description: "Impossibile ottenere la domanda del quiz",
-        variant: "destructive",
-      });
+      const result = await apiRequest(
+        '/api/games/session', 
+        'POST', 
+        {
+          user_id: 'test-user-id',
+          game_id: '00000000-0000-0000-0000-000000000001' // Quiz libri
+        }
+      );
+      setSessionId(result.session_id);
+    } catch (err) {
+      setError(`Errore durante la creazione della sessione: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  // Function to get author quiz question
-  const getAuthorQuizQuestion = async () => {
-    setLoading(true);
+  // Ottiene una domanda del quiz sui libri
+  const getBookQuestion = async () => {
+    setIsLoading(true);
+    setError(null);
     try {
-      const response = await apiRequest("/api/feltrinelli/authorquiz/question");
-      setApiResponse(response);
-      toast({
-        title: "Domanda quiz autori ricevuta",
-        description: "Domanda caricata con successo",
-      });
-    } catch (error) {
-      setApiResponse({ error: "Impossibile ottenere la domanda del quiz" });
-      toast({
-        title: "Errore",
-        description: "Impossibile ottenere la domanda del quiz",
-        variant: "destructive",
-      });
+      const result = await apiRequest<BookQuizQuestion>('/api/games/bookquiz/question?difficulty=1', 'GET');
+      setBookQuestion(result);
+    } catch (err) {
+      setError(`Errore nell'ottenere la domanda: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  // Function to get year quiz question
-  const getYearQuizQuestion = async () => {
-    setLoading(true);
+  // Invia una risposta al quiz
+  const submitAnswer = async (optionId: string) => {
+    if (!sessionId || !bookQuestion) {
+      setError('Sessione o domanda non disponibile');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
     try {
-      const response = await apiRequest("/api/feltrinelli/yearquiz/question");
-      setApiResponse(response);
-      toast({
-        title: "Domanda quiz anni ricevuta",
-        description: "Domanda caricata con successo",
-      });
-    } catch (error) {
-      setApiResponse({ error: "Impossibile ottenere la domanda del quiz" });
-      toast({
-        title: "Errore",
-        description: "Impossibile ottenere la domanda del quiz",
-        variant: "destructive",
-      });
+      const result = await apiRequest<AnswerResult>(
+        '/api/games/bookquiz/answer',
+        'POST',
+        {
+          session_id: sessionId,
+          question_id: bookQuestion.question_id,
+          answer_option_id: optionId,
+          time_taken: 5.0
+        }
+      );
+      setAnswerResult(result);
+    } catch (err) {
+      setError(`Errore nell'invio della risposta: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  // Function to get leaderboard
-  const getLeaderboard = async () => {
-    setLoading(true);
-    try {
-      const response = await apiRequest("/api/feltrinelli/leaderboard");
-      setApiResponse(response);
-      toast({
-        title: "Classifica ricevuta",
-        description: "Classifica caricata con successo",
-      });
-    } catch (error) {
-      setApiResponse({ error: "Impossibile ottenere la classifica" });
-      toast({
-        title: "Errore",
-        description: "Impossibile ottenere la classifica",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+  // Resetta tutto
+  const resetAll = () => {
+    setHealthCheck(null);
+    setBookQuestion(null);
+    setAnswerResult(null);
+    setSessionId(null);
+    setError(null);
   };
 
-  // Function to get game leaderboard
-  const getGameLeaderboard = async (gameType: string) => {
-    setLoading(true);
-    try {
-      const response = await apiRequest(`/api/feltrinelli/leaderboard/${gameType}`);
-      setApiResponse(response);
-      toast({
-        title: "Classifica gioco ricevuta",
-        description: `Classifica per ${gameType} caricata con successo`,
-      });
-    } catch (error) {
-      setApiResponse({ error: "Impossibile ottenere la classifica del gioco" });
-      toast({
-        title: "Errore",
-        description: "Impossibile ottenere la classifica del gioco",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Function to get rewards
-  const getRewards = async (gameType: string) => {
-    setLoading(true);
-    try {
-      const response = await apiRequest(`/api/feltrinelli/rewards?gameType=${gameType}`);
-      setApiResponse(response);
-      toast({
-        title: "Premi ricevuti",
-        description: `Premi per ${gameType} caricati con successo`,
-      });
-    } catch (error) {
-      setApiResponse({ error: "Impossibile ottenere i premi" });
-      toast({
-        title: "Errore",
-        description: "Impossibile ottenere i premi",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Esegue l'health check al caricamento della pagina
+  useEffect(() => {
+    runHealthCheck();
+  }, []);
 
   return (
-    <div className="container py-10">
+    <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-6">Test API Feltrinelli</h1>
       
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Controlli API</CardTitle>
-              <CardDescription>Testa le funzionalità API di Feltrinelli</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid grid-cols-3 mb-4">
-                  <TabsTrigger value="health">Status</TabsTrigger>
-                  <TabsTrigger value="quiz">Quiz</TabsTrigger>
-                  <TabsTrigger value="leaderboard">Extra</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="health" className="space-y-4">
-                  <div>
-                    <p className="mb-2">Stato API: <span className={apiStatus === "ok" ? "text-green-500 font-bold" : "text-red-500 font-bold"}>{apiStatus}</span></p>
-                    <Button onClick={checkApiHealth} disabled={loading}>
-                      {loading ? "Verifica in corso..." : "Verifica connessione API"}
-                    </Button>
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="quiz" className="space-y-4">
-                  <div className="grid grid-cols-1 gap-2">
-                    <Button onClick={getBookQuizQuestion} disabled={loading} variant="outline">
-                      Quiz Libri
-                    </Button>
-                    <Button onClick={getAuthorQuizQuestion} disabled={loading} variant="outline">
-                      Quiz Autori
-                    </Button>
-                    <Button onClick={getYearQuizQuestion} disabled={loading} variant="outline">
-                      Quiz Anni
-                    </Button>
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="leaderboard" className="space-y-4">
-                  <div className="grid grid-cols-1 gap-2">
-                    <Button onClick={getLeaderboard} disabled={loading} variant="outline">
-                      Classifica Generale
-                    </Button>
-                    <Button onClick={() => getGameLeaderboard('books')} disabled={loading} variant="outline">
-                      Classifica Quiz Libri
-                    </Button>
-                    <Button onClick={() => getRewards('books')} disabled={loading} variant="outline">
-                      Premi Quiz Libri
-                    </Button>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        </div>
-        
-        <div className="lg:col-span-8">
-          <Card className="h-full">
-            <CardHeader>
-              <CardTitle>Risultato API</CardTitle>
-              <CardDescription>Risposta dall'API di Feltrinelli</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-md overflow-auto max-h-[600px]">
-                <pre className="whitespace-pre-wrap break-words">
-                  {loading ? (
-                    "Caricamento in corso..."
-                  ) : apiResponse ? (
-                    JSON.stringify(apiResponse, null, 2)
-                  ) : (
-                    "Nessuna risposta da visualizzare. Seleziona un'operazione API."
-                  )}
-                </pre>
+      {error && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertTitle>Errore</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Health Check */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Health Check</CardTitle>
+            <CardDescription>Verifica lo stato dell'API</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {healthCheck ? (
+              <div className="p-4 bg-muted rounded-md">
+                <p><strong>Stato:</strong> {healthCheck.status}</p>
+                <p><strong>Messaggio:</strong> {healthCheck.message}</p>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            ) : (
+              <p>Nessun health check eseguito</p>
+            )}
+          </CardContent>
+          <CardFooter>
+            <Button onClick={runHealthCheck} disabled={isLoading}>
+              {isLoading ? 'Verifica in corso...' : 'Verifica stato API'}
+            </Button>
+          </CardFooter>
+        </Card>
+        
+        {/* Sessione di gioco */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Sessione di gioco</CardTitle>
+            <CardDescription>Crea una nuova sessione per il quiz</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {sessionId ? (
+              <div className="p-4 bg-muted rounded-md">
+                <p><strong>ID Sessione:</strong> {sessionId}</p>
+              </div>
+            ) : (
+              <p>Nessuna sessione attiva</p>
+            )}
+          </CardContent>
+          <CardFooter>
+            <Button onClick={createGameSession} disabled={isLoading}>
+              {isLoading ? 'Creazione in corso...' : 'Crea sessione'}
+            </Button>
+          </CardFooter>
+        </Card>
       </div>
-      <Toaster />
+      
+      <Separator className="my-8" />
+      
+      {/* Quiz sui libri */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Quiz sui libri</CardTitle>
+          <CardDescription>Test dell'API per il quiz sui libri</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            {bookQuestion && (
+              <div className="space-y-4">
+                <div className="p-4 bg-muted rounded-md">
+                  <h3 className="font-semibold text-lg">{bookQuestion.question_text}</h3>
+                  <p className="italic mt-2">{bookQuestion.abstract_snippet}</p>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {bookQuestion.options.map((option) => (
+                    <div 
+                      key={option.id}
+                      className="border rounded-md p-4 hover:bg-accent cursor-pointer transition-colors"
+                      onClick={() => submitAnswer(option.id)}
+                    >
+                      <h4 className="font-medium">{option.title}</h4>
+                      <p className="text-muted-foreground text-sm">{option.author}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {!bookQuestion && (
+              <p>Nessuna domanda caricata. Crea prima una sessione e poi ottieni una domanda.</p>
+            )}
+            
+            {answerResult && (
+              <div className={`p-4 rounded-md ${answerResult.is_correct ? 'bg-green-100' : 'bg-red-100'}`}>
+                <h3 className="font-semibold">
+                  {answerResult.is_correct ? '✅ Risposta corretta!' : '❌ Risposta errata'}
+                </h3>
+                <p>{answerResult.message}</p>
+                <Badge variant={answerResult.is_correct ? "default" : "outline"} className="mt-2">
+                  Punti: {answerResult.points}
+                </Badge>
+              </div>
+            )}
+          </div>
+        </CardContent>
+        <CardFooter className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <Button onClick={getBookQuestion} disabled={isLoading || !sessionId}>
+            {isLoading ? 'Caricamento...' : 'Ottieni domanda'}
+          </Button>
+          
+          <Button variant="outline" onClick={resetAll}>
+            Resetta tutto
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 }

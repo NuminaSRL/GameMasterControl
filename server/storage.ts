@@ -8,6 +8,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or } from "drizzle-orm";
+import { SupabaseStorage } from "./supabase-storage";
 
 // Storage interface for all operations
 export interface IStorage {
@@ -322,4 +323,12 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+// Scegli l'implementazione da utilizzare
+// Temporaneamente forziamo l'uso di DatabaseStorage mentre completiamo la migrazione a Supabase
+const useSupabase = false; // Forzato a false durante la migrazione
+// const useSupabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Esporta la classe storage appropriata
+export const storage: IStorage = useSupabase 
+  ? new SupabaseStorage() 
+  : new DatabaseStorage();
