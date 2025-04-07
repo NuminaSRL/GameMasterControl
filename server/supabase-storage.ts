@@ -38,7 +38,7 @@ export async function initSupabaseTables() {
 
 // Verifica se le tabelle esistono già
 async function checkExistingTables() {
-  const requiredTables = ['users', 'games', 'badges', 'game_badges', 'rewards', 'stats'];
+  const requiredTables = ['users', 'games', 'badges', 'flt_game_badges', 'rewards', 'stats'];
   const results = [];
   
   for (const table of requiredTables) {
@@ -81,9 +81,9 @@ async function createTablesManually() {
     const createBadges = await supabase.rpc('create_badges_table_if_not_exists');
     console.log("[Supabase] Badges table created or verified");
     
-    // Crea la tabella game_badges se non esiste
-    const createGameBadges = await supabase.rpc('create_game_badges_table_if_not_exists');
-    console.log("[Supabase] Game_badges table created or verified");
+    // Crea la tabella flt_game_badges se non esiste
+    const createGameBadges = await supabase.rpc('create_flt_game_badges_table_if_not_exists');
+    console.log("[Supabase] flt_game_badges table created or verified");
     
     // Crea la tabella rewards se non esiste
     const createRewards = await supabase.rpc('create_rewards_table_if_not_exists');
@@ -419,7 +419,7 @@ export class SupabaseStorage implements IStorage {
   
   async getGameBadges(gameId: number): Promise<Badge[]> {
     const { data: gameBadgeRelations, error } = await supabase
-      .from('game_badges')
+      .from('flt_game_badges')
       .select('badge_id')
       .eq('game_id', gameId);
     
@@ -442,7 +442,7 @@ export class SupabaseStorage implements IStorage {
   async assignBadgeToGame(gameBadge: InsertGameBadge): Promise<GameBadge> {
     // Check if already exists
     const { data: existing, error: checkError } = await supabase
-      .from('game_badges')
+      .from('flt_game_badges')
       .select('*')
       .eq('game_id', gameBadge.gameId)
       .eq('badge_id', gameBadge.badgeId)
@@ -459,7 +459,7 @@ export class SupabaseStorage implements IStorage {
     };
     
     const { data, error } = await supabase
-      .from('game_badges')
+      .from('flt_game_badges')
       .insert([dbGameBadge])
       .select()
       .single();
@@ -475,7 +475,7 @@ export class SupabaseStorage implements IStorage {
 
   async removeBadgeFromGame(gameId: number, badgeId: number): Promise<void> {
     const { error } = await supabase
-      .from('game_badges')
+      .from('flt_game_badges')
       .delete()
       .eq('game_id', gameId)
       .eq('badge_id', badgeId);
@@ -648,6 +648,10 @@ export class SupabaseStorage implements IStorage {
       imageUrl: dbReward.image_url || null,
       gameType: dbReward.game_type || 'books',
       feltrinelliRewardId: dbReward.feltrinelli_reward_id || null,
+      isImported: dbReward.is_imported || false,
+      pointsRequired: dbReward.points_required || 0,
+      originalImageUrl: dbReward.original_image_url || null,
+      syncedAt: dbReward.synced_at || null,
       createdAt: dbReward.created_at
     };
   }
@@ -665,6 +669,10 @@ export class SupabaseStorage implements IStorage {
       image_url: schemaReward.imageUrl || null,
       game_type: schemaReward.gameType || 'books',
       feltrinelli_reward_id: schemaReward.feltrinelliRewardId || null,
+      is_imported: schemaReward.isImported || false,
+      points_required: schemaReward.pointsRequired || 0,
+      original_image_url: schemaReward.originalImageUrl || null,
+      synced_at: schemaReward.syncedAt || null,
       created_at: new Date()
     };
   }

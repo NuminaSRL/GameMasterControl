@@ -89,7 +89,7 @@ export const insertBadgeSchema = createInsertSchema(badges).omit({
 });
 
 // Game-Badge mapping (many-to-many)
-export const gameBadges = pgTable("game_badges", {
+export const gameBadges = pgTable("flt_game_badges", {
   id: serial("id").primaryKey(),
   gameId: integer("game_id").notNull().references(() => games.id),
   badgeId: integer("badge_id").notNull().references(() => badges.id),
