@@ -345,6 +345,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Ottieni tutti i premi Feltrinelli
   app.get('/api/feltrinelli/rewards-all', fltSimpleApi.getAllFLTRewards);
   
+  // Ottieni tutti i badges di un gioco
+  app.get('/api/feltrinelli/games/:gameId/badges', fltSimpleApi.getGameBadges);
+  
+  // Ottieni tutti i badges disponibili
+  app.get('/api/feltrinelli/badges', fltSimpleApi.getAllBadges);
+  
   // Ottieni la classifica (leaderboard)
   app.get('/api/feltrinelli/leaderboard-data', async (req, res) => {
     try {

@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import { db } from "./db";
 import { supabase } from "./supabase";
-import { flt_games, flt_rewards, flt_users, gameSettings, insertFLTGameSchema, insertFLTRewardSchema, insertFLTUserSchema, insertGameSettingsSchema, FLTGame, FLTReward, FLTUser, GameSettings } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { fltGames, flt_rewards, flt_users, gameSettings, insertFltGameSchema, insertFLTRewardSchema, insertFLTUserSchema, insertGameSettingsSchema, FLTGame, FLTReward, FLTUser, GameSettings } from "@shared/schema";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "crypto";
 
@@ -148,7 +148,7 @@ export async function getFLTGame(req: Request, res: Response) {
 // POST: Crea un nuovo gioco
 export async function createFLTGame(req: Request, res: Response) {
   try {
-    const validatedData = insertFLTGameSchema.parse(req.body);
+    const validatedData = insertFltGameSchema.parse(req.body);
     
     // Genera un UUID per il nuovo gioco
     const gameId = crypto.randomUUID();
@@ -390,6 +390,153 @@ export async function saveGameSettings(req: Request, res: Response) {
   } catch (error) {
     console.error("Error saving game settings:", error);
     return res.status(500).json({ error: "Failed to save game settings" });
+  }
+}
+
+// ===== API per tabella flt_game_badges =====
+
+// GET: Recupera tutti i badges per un gioco
+export async function getGameBadges(req: Request, res: Response) {
+  try {
+    const { gameId } = req.params;
+    
+    if (!gameId) {
+      return res.status(400).json({ error: "Game ID is required" });
+    }
+
+    // Trova l'ID interno del gioco usando l'UUID Feltrinelli dalla tabella flt_games
+    console.log(`Cerco mapping per il gioco con feltrinelli_id: ${gameId}`);
+
+    // Per ora, usiamo valori conosciuti dal database per il test
+    // 00000000-0000-0000-0000-000000000001 (books) -> interno 2
+    // 00000000-0000-0000-0000-000000000002 (authors) -> interno 3
+    // 00000000-0000-0000-0000-000000000003 (years) -> interno 4
+    let internalGameId: number;
+    let gameName: string;
+    
+    if (gameId === '00000000-0000-0000-0000-000000000001') {
+      internalGameId = 2;
+      gameName = "Quiz Libri";
+    } else if (gameId === '00000000-0000-0000-0000-000000000002') {
+      internalGameId = 3;
+      gameName = "Quiz Autori";
+    } else if (gameId === '00000000-0000-0000-0000-000000000003') {
+      internalGameId = 4;
+      gameName = "Quiz Anno"; 
+    } else {
+      // Prova a cercare nel database reale
+      try {
+        console.log("Query SQL diretta per trovare il gioco");
+        // Esegui una query SQL diretta con le colonne corrette
+        const rows = await db.execute(
+          sql`SELECT id, internal_id, name FROM flt_games WHERE feltrinelli_id = ${gameId}`
+        );
+        
+        console.log("Risultato SQL diretto:", rows);
+        
+        if (!rows || !rows.rows || rows.rows.length === 0) {
+          return res.status(404).json({ 
+            error: "Game mapping not found", 
+            message: `No mapping found for Feltrinelli ID: ${gameId}` 
+          });
+        }
+        
+        // Usa il primo risultato della query SQL
+        internalGameId = rows.rows[0].internal_id || rows.rows[0].id;
+        gameName = rows.rows[0].name;
+        
+        console.log("Mapping trovato con SQL diretto:", { internalGameId, gameName });
+      } catch (dbError) {
+        console.error("Database error while finding game mapping:", dbError);
+        return res.status(500).json({ 
+          error: "Database error", 
+          message: dbError instanceof Error ? dbError.message : "Unknown database error" 
+        });
+      }
+    }
+    
+    // Logghiamo i dati per debug più dettagliati
+    console.log("IMPORTANT DEBUG - Game mapping trovato:", {
+      feltrinelliId: gameId,
+      internalGameId,
+      internalGameIdType: typeof internalGameId,
+      gameName
+    });
+    
+    // Convertiamo in numero se è una stringa
+    const internalGameIdFixed = typeof internalGameId === 'string' 
+      ? parseInt(internalGameId, 10) 
+      : internalGameId;
+    
+    // Invece di usare la relazione che causa problemi di tipo, facciamo 2 query separate
+    // Prima otteniamo gli ID dei badge associati al gioco
+    const { data: gameBadgeAssociations, error: associationsError } = await supabase
+      .from('flt_game_badges')
+      .select('badge_id')
+      .eq('game_id', internalGameIdFixed);
+      
+    if (associationsError) throw associationsError;
+    
+    // Creiamo un array di badge vuoto
+    const badges: Array<{
+      id: number;
+      name: string;
+      description: string;
+      icon: string;
+      color: string;
+    }> = [];
+    
+    // Se ci sono badge associati, li recuperiamo individualmente
+    if (gameBadgeAssociations && gameBadgeAssociations.length > 0) {
+      // Estraiamo gli ID dei badge
+      const badgeIds = gameBadgeAssociations.map(association => association.badge_id);
+      
+      // Ora recuperiamo i dettagli dei badge
+      const { data: badgeDetails, error: badgeError } = await supabase
+        .from('badges')
+        .select('id, name, description, icon, color')
+        .in('id', badgeIds);
+      
+      if (badgeError) throw badgeError;
+      
+      // Aggiungiamo i dettagli dei badge all'array
+      if (badgeDetails && badgeDetails.length > 0) {
+        badges.push(...badgeDetails);
+      }
+    }
+    
+    return res.json({
+      game_id: gameId,
+      internal_game_id: internalGameIdFixed,
+      game_name: gameName,
+      badges: badges
+    });
+  } catch (error) {
+    console.error("Error getting game badges:", error);
+    return res.status(500).json({ 
+      error: "Failed to get game badges", 
+      message: error instanceof Error ? error.message : "Unknown error" 
+    });
+  }
+}
+
+// GET: Recupera tutti i badges disponibili
+export async function getAllBadges(req: Request, res: Response) {
+  try {
+    const { data: badges, error } = await supabase
+      .from('badges')
+      .select('*')
+      .order('id', { ascending: true });
+      
+    if (error) throw error;
+    
+    return res.json(badges);
+  } catch (error) {
+    console.error("Error getting badges:", error);
+    return res.status(500).json({ 
+      error: "Failed to get badges", 
+      message: error instanceof Error ? error.message : "Unknown error" 
+    });
   }
 }
 

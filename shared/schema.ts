@@ -168,27 +168,13 @@ export const insertFLTUserSchema = createInsertSchema(flt_users).omit({
   updatedAt: true
 });
 
-// Tabella per i giochi Feltrinelli (semplificata)
-export const flt_games = pgTable("flt_games", {
-  id: uuid("id").primaryKey(),
-  name: text("name").notNull(),
-  description: text("description").notNull(),
-  active: boolean("active").notNull().default(true),
-  startDate: timestamp("start_date"),
-  endDate: timestamp("end_date"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const insertFLTGameSchema = createInsertSchema(flt_games).omit({
-  createdAt: true,
-  updatedAt: true
-});
+// Tabella per i giochi Feltrinelli (semplificata) - Rimossa per evitare conflitti
+// Usare fltGames al posto di flt_games
 
 // Tabella per le impostazioni dei giochi Feltrinelli
 export const gameSettings = pgTable("flt_game_settings", {
   id: uuid("id").primaryKey(),
-  gameId: uuid("game_id").notNull().references(() => flt_games.id),
+  gameId: uuid("game_id").notNull().references(() => fltGames.id),
   timeDuration: integer("time_duration").notNull().default(30),
   questionCount: integer("question_count").notNull().default(5),
   active: boolean("active").notNull().default(true),
@@ -197,9 +183,9 @@ export const gameSettings = pgTable("flt_game_settings", {
 });
 
 export const gameSettingsRelations = relations(gameSettings, ({ one }) => ({
-  game: one(flt_games, {
+  game: one(fltGames, {
     fields: [gameSettings.gameId],
-    references: [flt_games.id]
+    references: [fltGames.id]
   })
 }));
 
@@ -214,7 +200,7 @@ export const flt_rewards = pgTable("flt_rewards", {
   id: uuid("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description").notNull(),
-  gameId: uuid("game_id").references(() => flt_games.id),
+  gameId: uuid("game_id").references(() => fltGames.id),
   type: text("type").notNull(),
   value: text("value").notNull(),
   icon: text("icon").notNull(),
@@ -228,9 +214,9 @@ export const flt_rewards = pgTable("flt_rewards", {
 });
 
 export const flt_rewardsRelations = relations(flt_rewards, ({ one }) => ({
-  game: one(flt_games, {
+  game: one(fltGames, {
     fields: [flt_rewards.gameId],
-    references: [flt_games.id]
+    references: [fltGames.id]
   })
 }));
 
@@ -396,8 +382,8 @@ export type FltUserReward = typeof fltUserRewards.$inferSelect;
 export type InsertFLTUser = z.infer<typeof insertFLTUserSchema>;
 export type FLTUser = typeof flt_users.$inferSelect;
 
-export type InsertFLTGame = z.infer<typeof insertFLTGameSchema>;
-export type FLTGame = typeof flt_games.$inferSelect;
+// Ridefiniamo il tipo per chiarezza e consistenza
+export type FLTGame = typeof fltGames.$inferSelect;
 
 export type InsertFLTReward = z.infer<typeof insertFLTRewardSchema>;
 export type FLTReward = typeof flt_rewards.$inferSelect;
