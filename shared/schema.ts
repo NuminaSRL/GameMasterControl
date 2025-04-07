@@ -93,9 +93,13 @@ export const rewards = pgTable("rewards", {
   description: text("description").notNull(),
   type: text("type").notNull(),
   value: text("value").notNull(),
+  rank: integer("rank").notNull().default(10), // Position in leaderboard for this reward
+  imageUrl: text("image_url"), // URL to image (can be base64 or external URL)
   icon: text("icon").notNull(),
   color: text("color").notNull(),
   available: integer("available").notNull(),
+  gameType: text("game_type", { enum: ["books", "authors", "years"] }).default('books'),
+  feltrinelliRewardId: text("feltrinelli_reward_id"), // ID from Feltrinelli API if applicable
   createdAt: timestamp("created_at").defaultNow(),
 });
 

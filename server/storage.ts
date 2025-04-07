@@ -33,6 +33,8 @@ export interface IStorage {
   getAllRewards(): Promise<Reward[]>;
   getReward(id: number): Promise<Reward | undefined>;
   createReward(reward: InsertReward): Promise<Reward>;
+  updateReward(id: number, reward: Partial<InsertReward>): Promise<Reward | undefined>;
+  deleteReward(id: number): Promise<void>;
   
   // Game-Badge operations
   getGameBadges(gameId: number): Promise<Badge[]>;
@@ -214,6 +216,33 @@ export class DatabaseStorage implements IStorage {
       .values(reward)
       .returning();
     return newReward;
+  }
+
+  async updateReward(id: number, rewardUpdate: Partial<InsertReward>): Promise<Reward | undefined> {
+    // Get existing reward
+    const [existingReward] = await db
+      .select()
+      .from(rewards)
+      .where(eq(rewards.id, id));
+    
+    if (!existingReward) {
+      return undefined;
+    }
+    
+    // Update reward
+    const [updatedReward] = await db
+      .update(rewards)
+      .set(rewardUpdate)
+      .where(eq(rewards.id, id))
+      .returning();
+    
+    return updatedReward;
+  }
+
+  async deleteReward(id: number): Promise<void> {
+    await db
+      .delete(rewards)
+      .where(eq(rewards.id, id));
   }
 
   async getGameBadges(gameId: number): Promise<Badge[]> {

@@ -476,6 +476,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ message: `Error creating reward: ${error instanceof Error ? error.message : 'Unknown error'}` });
     }
   });
+
+  // Get a reward by ID
+  app.get('/api/rewards/:id', async (req, res) => {
+    try {
+      const rewardId = parseInt(req.params.id);
+      const reward = await storage.getReward(rewardId);
+      if (!reward) {
+        return res.status(404).json({ message: 'Reward not found' });
+      }
+      res.json(reward);
+    } catch (error) {
+      res.status(500).json({ message: `Error fetching reward: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // Update a reward
+  app.patch('/api/rewards/:id', async (req, res) => {
+    try {
+      const rewardId = parseInt(req.params.id);
+      const reward = await storage.getReward(rewardId);
+      if (!reward) {
+        return res.status(404).json({ message: 'Reward not found' });
+      }
+      
+      const validatedData = insertRewardSchema.partial().parse(req.body);
+      const updatedReward = await storage.updateReward(rewardId, validatedData);
+      res.json(updatedReward);
+    } catch (error) {
+      res.status(400).json({ message: `Error updating reward: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+  // Delete a reward
+  app.delete('/api/rewards/:id', async (req, res) => {
+    try {
+      const rewardId = parseInt(req.params.id);
+      const reward = await storage.getReward(rewardId);
+      if (!reward) {
+        return res.status(404).json({ message: 'Reward not found' });
+      }
+      
+      await storage.deleteReward(rewardId);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: `Error deleting reward: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
   
   // === STATS ENDPOINTS ===
   

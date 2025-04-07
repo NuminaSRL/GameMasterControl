@@ -344,6 +344,40 @@ export class SupabaseStorage implements IStorage {
     if (error) throw new Error(`Failed to create reward: ${error.message}`);
     return formatDates(this._mapDbRewardToSchema(data));
   }
+  
+  async updateReward(id: number, rewardUpdate: Partial<InsertReward>): Promise<Reward | undefined> {
+    // Check if reward exists
+    const { data: existingReward, error: checkError } = await supabase
+      .from('rewards')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (checkError || !existingReward) return undefined;
+    
+    // Convert from schema to db format
+    const dbReward = this._mapSchemaRewardToDb(rewardUpdate as InsertReward);
+    
+    // Update reward
+    const { data, error } = await supabase
+      .from('rewards')
+      .update(dbReward)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw new Error(`Failed to update reward: ${error.message}`);
+    return formatDates(this._mapDbRewardToSchema(data));
+  }
+  
+  async deleteReward(id: number): Promise<void> {
+    const { error } = await supabase
+      .from('rewards')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw new Error(`Failed to delete reward: ${error.message}`);
+  }
 
   // === Game-Badge operations ===
   
@@ -574,6 +608,10 @@ export class SupabaseStorage implements IStorage {
       icon: dbReward.icon,
       color: dbReward.color,
       available: dbReward.available,
+      rank: dbReward.rank || 10,
+      imageUrl: dbReward.image_url || null,
+      gameType: dbReward.game_type || 'books',
+      feltrinelliRewardId: dbReward.feltrinelli_reward_id || null,
       createdAt: dbReward.created_at
     };
   }
@@ -587,6 +625,10 @@ export class SupabaseStorage implements IStorage {
       icon: schemaReward.icon,
       color: schemaReward.color,
       available: schemaReward.available,
+      rank: schemaReward.rank || 10,
+      image_url: schemaReward.imageUrl || null,
+      game_type: schemaReward.gameType || 'books',
+      feltrinelli_reward_id: schemaReward.feltrinelliRewardId || null,
       created_at: new Date()
     };
   }
