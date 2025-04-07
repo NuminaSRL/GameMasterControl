@@ -5,6 +5,7 @@ import { insertGameSchema, insertBadgeSchema, insertRewardSchema, insertGameBadg
 import * as feltrinelliApi from "./feltrinelli-api";
 import { GAME_IDS } from "./feltrinelli-api";
 import * as fltApi from "./flt-api";
+import * as fltSimpleApi from "./flt-simple-api";
 import { supabase } from "./supabase";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -855,6 +856,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to fetch Feltrinelli user profiles' });
     }
   });
+
+  // ===== NUOVE API PER TABELLE SEMPLIFICATE =====
+  
+  // API per FLT_users
+  app.get('/api/flt/users', fltSimpleApi.getAllFLTUsers);
+  app.get('/api/flt/users/:id', fltSimpleApi.getFLTUser);
+  app.post('/api/flt/users', fltSimpleApi.createFLTUser);
+  
+  // API per FLT_games
+  app.get('/api/flt/games', fltSimpleApi.getAllFLTGames);
+  app.get('/api/flt/games/:id', fltSimpleApi.getFLTGame);
+  app.post('/api/flt/games', fltSimpleApi.createFLTGame);
+  app.patch('/api/flt/games/:id', fltSimpleApi.updateFLTGame);
+  app.post('/api/flt/games/:id/toggle', fltSimpleApi.toggleFLTGameStatus);
+  
+  // API per game_settings
+  app.get('/api/flt/game-settings/:gameId', fltSimpleApi.getGameSettings);
+  app.post('/api/flt/game-settings/:gameId', fltSimpleApi.saveGameSettings);
+  
+  // API per FLT_rewards
+  app.get('/api/flt/rewards', fltSimpleApi.getAllFLTRewards);
+  app.get('/api/flt/rewards/game/:gameId', fltSimpleApi.getGameFLTRewards);
+  app.get('/api/flt/rewards/:id', fltSimpleApi.getFLTReward);
+  app.post('/api/flt/rewards', fltSimpleApi.createFLTReward);
+  app.patch('/api/flt/rewards/:id', fltSimpleApi.updateFLTReward);
+  app.post('/api/flt/rewards/:id/toggle', fltSimpleApi.toggleFLTRewardStatus);
 
   return httpServer;
 }

@@ -152,6 +152,94 @@ export const stats = pgTable("stats", {
 
 // FELTRINELLI API - TABELLE PER MAPPING ED ESPOSIZIONE API
 
+// Tabella per gli utenti Feltrinelli (semplificata)
+export const FLT_users = pgTable("FLT_users", {
+  id: uuid("id").primaryKey(),
+  userId: uuid("user_id").notNull().unique(),
+  active: boolean("active").notNull().default(true),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertFLTUserSchema = createInsertSchema(FLT_users).omit({
+  createdAt: true,
+  updatedAt: true
+});
+
+// Tabella per i giochi Feltrinelli (semplificata)
+export const FLT_games = pgTable("FLT_games", {
+  id: uuid("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  active: boolean("active").notNull().default(true),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertFLTGameSchema = createInsertSchema(FLT_games).omit({
+  createdAt: true,
+  updatedAt: true
+});
+
+// Tabella per le impostazioni dei giochi
+export const gameSettings = pgTable("game_settings", {
+  id: uuid("id").primaryKey(),
+  gameId: uuid("game_id").notNull().references(() => FLT_games.id),
+  timeDuration: integer("time_duration").notNull().default(30),
+  questionCount: integer("question_count").notNull().default(5),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const gameSettingsRelations = relations(gameSettings, ({ one }) => ({
+  game: one(FLT_games, {
+    fields: [gameSettings.gameId],
+    references: [FLT_games.id]
+  })
+}));
+
+export const insertGameSettingsSchema = createInsertSchema(gameSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
+// Tabella per i premi Feltrinelli (semplificata)
+export const FLT_rewards = pgTable("FLT_rewards", {
+  id: uuid("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  gameId: uuid("game_id").references(() => FLT_games.id),
+  type: text("type").notNull(),
+  value: text("value").notNull(),
+  icon: text("icon").notNull(),
+  color: text("color").notNull(),
+  available: integer("available").notNull(),
+  active: boolean("active").notNull().default(true),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const FLT_rewardsRelations = relations(FLT_rewards, ({ one }) => ({
+  game: one(FLT_games, {
+    fields: [FLT_rewards.gameId],
+    references: [FLT_games.id]
+  })
+}));
+
+export const insertFLTRewardSchema = createInsertSchema(FLT_rewards).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
+
 // Tabella per le sessioni di gioco Feltrinelli
 export const fltGameSessions = pgTable("flt_game_sessions", {
   id: uuid("id").primaryKey(),
@@ -303,5 +391,18 @@ export type FltLeaderboard = typeof fltLeaderboard.$inferSelect;
 
 export type InsertFltUserReward = z.infer<typeof insertFltUserRewardSchema>;
 export type FltUserReward = typeof fltUserRewards.$inferSelect;
+
+// Nuovi tipi per le tabelle semplificate
+export type InsertFLTUser = z.infer<typeof insertFLTUserSchema>;
+export type FLTUser = typeof FLT_users.$inferSelect;
+
+export type InsertFLTGame = z.infer<typeof insertFLTGameSchema>;
+export type FLTGame = typeof FLT_games.$inferSelect;
+
+export type InsertFLTReward = z.infer<typeof insertFLTRewardSchema>;
+export type FLTReward = typeof FLT_rewards.$inferSelect;
+
+export type InsertGameSettings = z.infer<typeof insertGameSettingsSchema>;
+export type GameSettings = typeof gameSettings.$inferSelect;
 
 export type Stats = typeof stats.$inferSelect;
