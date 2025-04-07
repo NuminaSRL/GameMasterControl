@@ -7,6 +7,8 @@ import { GAME_IDS } from "./feltrinelli-api";
 import * as fltApi from "./flt-api";
 import * as fltSimpleApi from "./flt-simple-api";
 import { supabase } from "./supabase";
+import { db } from "./db";
+import { sql } from 'drizzle-orm';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Create HTTP server
@@ -360,24 +362,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'gameId query parameter is required' });
       }
       
-      const { data: leaderboardEntries, error } = await supabase
-        .from('flt_leaderboard')
-        .select('*')
-        .eq('game_id', gameId)
-        .eq('period', period)
-        .order('points', { ascending: false })
-        .limit(Number(limit));
+      // Utilizziamo Drizzle direttamente per evitare problemi con Supabase
+      const result = await db.execute(
+        sql`SELECT * FROM flt_leaderboard 
+            WHERE game_id = ${gameId as string} 
+            AND period = ${period as string} 
+            ORDER BY points DESC 
+            LIMIT ${Number(limit)}`
+      ).catch(err => {
+        console.error('Database error fetching leaderboard:', err);
+        return { rows: [] };
+      });
       
-      if (error) {
-        console.error('Error fetching leaderboard:', error);
-        return res.json({ data: [] }); // Restituiamo un array vuoto invece di generare un errore
-      }
+      // Per garantire compatibilità con il client, restituiamo un formato consistente
+      const leaderboardEntries = result.rows || [];
       
-      res.json({ data: leaderboardEntries || [] });
+      res.json({ data: leaderboardEntries });
     } catch (error) {
       console.error('Error in leaderboard endpoint:', error);
       // Per evitare errori 500 al client, restituiamo un array vuoto
-      res.json({ data: [], error: `Error fetching leaderboard: ${error instanceof Error ? error.message : 'Unknown error'}` });
+      res.json({ data: [] });
     }
   });
   
@@ -960,9 +964,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }
   
-  // Assicuriamoci che ci sia l'endpoint specifico per Feltrinelli
-  if (!app._router.stack.some(r => r.route && r.route.path === '/api/feltrinelli/health-check')) {
-    app.get('/api/feltrinelli/health-check', async (req, res) => {
+  // === Endpoint specifici per l'integrazione con Feltrinelli ===
+  
+  // Endpoint health check
+  if (!app._router.stack.some(r => r.route && r.route.path === '/api/feltrinelli/health')) {
+    app.get('/api/feltrinelli/health', async (req, res) => {
       try {
         // Verifichiamo la connessione al database
         const { count, error } = await supabase
@@ -984,6 +990,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } catch (error) {
         res.status(500).json({ status: 'error', message: `Error in health check: ${error instanceof Error ? error.message : 'Unknown error'}` });
+      }
+    });
+  }
+  
+  // Endpoint per recuperare tutti i giochi disponibili
+  if (!app._router.stack.some(r => r.route && r.route.path === '/api/feltrinelli/games')) {
+    app.get('/api/feltrinelli/games', async (req, res) => {
+      try {
+        // Recuperiamo solo i giochi attivi
+        const { data, error } = await supabase
+          .from('flt_games')
+          .select('*')
+          .eq('is_active', true)
+          .order('name', { ascending: true });
+        
+        if (error) throw error;
+        
+        const formattedGames = data?.map(game => ({
+          id: game.feltrinelli_id,
+          name: game.name,
+          description: game.description,
+          is_active: game.is_active,
+          created_at: game.created_at
+        })) || [];
+        
+        res.json(formattedGames);
+      } catch (error) {
+        console.error("Error getting active games:", error);
+        res.status(500).json({ error: "Failed to get active games" });
+      }
+    });
+  }
+  
+  // Endpoint per recuperare tutti gli ID dei giochi come array
+  if (!app._router.stack.some(r => r.route && r.route.path === '/api/feltrinelli/game-ids')) {
+    app.get('/api/feltrinelli/game-ids', async (req, res) => {
+      try {
+        // Utilizziamo una query SQL diretta per evitare problemi con i nomi delle colonne
+        const gameIds = await db.execute(
+          sql`SELECT id, feltrinelli_id, name, is_active FROM flt_games ORDER BY name ASC`
+        ).catch(err => {
+          console.error("Database error getting game IDs:", err);
+          return { rows: [] };
+        });
+        
+        const formattedGames = gameIds.rows && gameIds.rows.length > 0 ? 
+          gameIds.rows.map(game => ({
+            id: game.feltrinelli_id,
+            name: game.name,
+            active: game.is_active
+          })) : [];
+        
+        res.json(formattedGames);
+      } catch (error) {
+        console.error("Error getting game IDs:", error);
+        // Fallback di emergenza - ritorniamo dati statici per garantire la compatibilità
+        res.json([
+          { id: "00000000-0000-0000-0000-000000000001", name: "IndovinaLibro", active: true },
+          { id: "00000000-0000-0000-0000-000000000002", name: "Indovina l'Autore", active: true },
+          { id: "00000000-0000-0000-0000-000000000003", name: "Indovina l'Anno", active: true }
+        ]);
+      }
+    });
+  }
+  
+  // Endpoint che restituisce gli ID dei giochi come oggetto (compatibilità)
+  if (!app._router.stack.some(r => r.route && r.route.path === '/api/feltrinelli/game-ids-v1')) {
+    app.get('/api/feltrinelli/game-ids-v1', async (req, res) => {
+      try {
+        // Questo formato è usato dalla versione originale dell'API e deve restare così
+        // È una mappa fissa che mappa i tipi di gioco ai loro UUID corrispondenti
+        const gameIdsMap: Record<string, string> = {
+          books: "00000000-0000-0000-0000-000000000001",
+          authors: "00000000-0000-0000-0000-000000000002",
+          years: "00000000-0000-0000-0000-000000000003"
+        };
+        
+        res.json(gameIdsMap);
+      } catch (error) {
+        console.error("Error getting game IDs map:", error);
+        res.status(500).json({ error: "Failed to get game IDs map" });
+      }
+    });
+  }
+  
+  // Endpoint per recuperare tutti i premi disponibili
+  if (!app._router.stack.some(r => r.route && r.route.path === '/api/feltrinelli/rewards')) {
+    app.get('/api/feltrinelli/rewards', async (req, res) => {
+      try {
+        const { data, error } = await supabase
+          .from('flt_rewards')
+          .select('*')
+          .eq('active', true)
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        const rewards = data?.map(reward => ({
+          id: reward.id,
+          name: reward.name,
+          description: reward.description,
+          type: reward.type,
+          value: reward.value,
+          icon: reward.icon,
+          color: reward.color,
+          available: reward.available,
+          created_at: reward.created_at
+        })) || [];
+        
+        res.json({ success: true, rewards });
+      } catch (error) {
+        console.error("Error getting rewards:", error);
+        res.status(500).json({ error: "Failed to get rewards" });
+      }
+    });
+  }
+  
+  // Endpoint per recuperare i premi di un utente specifico
+  if (!app._router.stack.some(r => r.route && r.route.path === '/api/feltrinelli/rewards/user/:userId')) {
+    app.get('/api/feltrinelli/rewards/user/:userId', async (req, res) => {
+      try {
+        const { userId } = req.params;
+        
+        if (!userId) {
+          return res.status(400).json({ error: "User ID is required" });
+        }
+        
+        // Recupera i premi assegnati a questo utente
+        const { data, error } = await supabase
+          .from('flt_user_rewards')
+          .select('reward_id, awarded_at, flt_rewards(id, name, description, type, value, icon, color)')
+          .eq('user_id', userId);
+        
+        if (error) throw error;
+        
+        // Formatta i risultati
+        const userRewards = data?.map(record => ({
+          id: record.flt_rewards.id,
+          name: record.flt_rewards.name,
+          description: record.flt_rewards.description,
+          type: record.flt_rewards.type,
+          value: record.flt_rewards.value,
+          icon: record.flt_rewards.icon,
+          color: record.flt_rewards.color,
+          awarded_at: record.awarded_at
+        })) || [];
+        
+        res.json(userRewards);
+      } catch (error) {
+        console.error("Error getting user rewards:", error);
+        res.status(500).json({ error: "Failed to get user rewards" });
       }
     });
   }
