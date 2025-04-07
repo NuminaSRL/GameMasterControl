@@ -153,7 +153,7 @@ export const stats = pgTable("stats", {
 // FELTRINELLI API - TABELLE PER MAPPING ED ESPOSIZIONE API
 
 // Tabella per gli utenti Feltrinelli (semplificata)
-export const FLT_users = pgTable("FLT_users", {
+export const flt_users = pgTable("flt_users", {
   id: uuid("id").primaryKey(),
   userId: uuid("user_id").notNull().unique(),
   active: boolean("active").notNull().default(true),
@@ -163,13 +163,13 @@ export const FLT_users = pgTable("FLT_users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertFLTUserSchema = createInsertSchema(FLT_users).omit({
+export const insertFLTUserSchema = createInsertSchema(flt_users).omit({
   createdAt: true,
   updatedAt: true
 });
 
 // Tabella per i giochi Feltrinelli (semplificata)
-export const FLT_games = pgTable("FLT_games", {
+export const flt_games = pgTable("flt_games", {
   id: uuid("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description").notNull(),
@@ -180,7 +180,7 @@ export const FLT_games = pgTable("FLT_games", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertFLTGameSchema = createInsertSchema(FLT_games).omit({
+export const insertFLTGameSchema = createInsertSchema(flt_games).omit({
   createdAt: true,
   updatedAt: true
 });
@@ -188,7 +188,7 @@ export const insertFLTGameSchema = createInsertSchema(FLT_games).omit({
 // Tabella per le impostazioni dei giochi Feltrinelli
 export const gameSettings = pgTable("flt_game_settings", {
   id: uuid("id").primaryKey(),
-  gameId: uuid("game_id").notNull().references(() => FLT_games.id),
+  gameId: uuid("game_id").notNull().references(() => flt_games.id),
   timeDuration: integer("time_duration").notNull().default(30),
   questionCount: integer("question_count").notNull().default(5),
   active: boolean("active").notNull().default(true),
@@ -197,9 +197,9 @@ export const gameSettings = pgTable("flt_game_settings", {
 });
 
 export const gameSettingsRelations = relations(gameSettings, ({ one }) => ({
-  game: one(FLT_games, {
+  game: one(flt_games, {
     fields: [gameSettings.gameId],
-    references: [FLT_games.id]
+    references: [flt_games.id]
   })
 }));
 
@@ -210,11 +210,11 @@ export const insertGameSettingsSchema = createInsertSchema(gameSettings).omit({
 });
 
 // Tabella per i premi Feltrinelli (semplificata)
-export const FLT_rewards = pgTable("FLT_rewards", {
+export const flt_rewards = pgTable("flt_rewards", {
   id: uuid("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description").notNull(),
-  gameId: uuid("game_id").references(() => FLT_games.id),
+  gameId: uuid("game_id").references(() => flt_games.id),
   type: text("type").notNull(),
   value: text("value").notNull(),
   icon: text("icon").notNull(),
@@ -227,14 +227,14 @@ export const FLT_rewards = pgTable("FLT_rewards", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const FLT_rewardsRelations = relations(FLT_rewards, ({ one }) => ({
-  game: one(FLT_games, {
-    fields: [FLT_rewards.gameId],
-    references: [FLT_games.id]
+export const flt_rewardsRelations = relations(flt_rewards, ({ one }) => ({
+  game: one(flt_games, {
+    fields: [flt_rewards.gameId],
+    references: [flt_games.id]
   })
 }));
 
-export const insertFLTRewardSchema = createInsertSchema(FLT_rewards).omit({
+export const insertFLTRewardSchema = createInsertSchema(flt_rewards).omit({
   id: true,
   createdAt: true,
   updatedAt: true
@@ -394,13 +394,13 @@ export type FltUserReward = typeof fltUserRewards.$inferSelect;
 
 // Nuovi tipi per le tabelle semplificate
 export type InsertFLTUser = z.infer<typeof insertFLTUserSchema>;
-export type FLTUser = typeof FLT_users.$inferSelect;
+export type FLTUser = typeof flt_users.$inferSelect;
 
 export type InsertFLTGame = z.infer<typeof insertFLTGameSchema>;
-export type FLTGame = typeof FLT_games.$inferSelect;
+export type FLTGame = typeof flt_games.$inferSelect;
 
 export type InsertFLTReward = z.infer<typeof insertFLTRewardSchema>;
-export type FLTReward = typeof FLT_rewards.$inferSelect;
+export type FLTReward = typeof flt_rewards.$inferSelect;
 
 export type InsertGameSettings = z.infer<typeof insertGameSettingsSchema>;
 export type GameSettings = typeof gameSettings.$inferSelect;

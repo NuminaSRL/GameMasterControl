@@ -1,18 +1,18 @@
 import { Request, Response } from "express";
 import { db } from "./db";
 import { supabase } from "./supabase";
-import { FLT_games, FLT_rewards, FLT_users, gameSettings, insertFLTGameSchema, insertFLTRewardSchema, insertFLTUserSchema, insertGameSettingsSchema } from "@shared/schema";
+import { flt_games, flt_rewards, flt_users, gameSettings, insertFLTGameSchema, insertFLTRewardSchema, insertFLTUserSchema, insertGameSettingsSchema, FLTGame, FLTReward, FLTUser, GameSettings } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "crypto";
 
-// ===== API per tabella FLT_users =====
+// ===== API per tabella flt_users =====
 
 // GET: Recupera tutti gli utenti
 export async function getAllFLTUsers(req: Request, res: Response) {
   try {
     const { data: users, error } = await supabase
-      .from('FLT_users')
+      .from('flt_users')
       .select('*')
       .order('created_at', { ascending: false });
 
@@ -31,7 +31,7 @@ export async function getFLTUser(req: Request, res: Response) {
     const { id } = req.params;
     
     const { data: user, error } = await supabase
-      .from('FLT_users')
+      .from('flt_users')
       .select('*')
       .eq('id', id)
       .single();
@@ -61,7 +61,7 @@ export async function createFLTUser(req: Request, res: Response) {
 
     // Verifica se esiste già
     const { data: existingUser, error } = await supabase
-      .from('FLT_users')
+      .from('flt_users')
       .select('*')
       .eq('user_id', user_id)
       .single();
@@ -83,7 +83,7 @@ export async function createFLTUser(req: Request, res: Response) {
 
     // Crea un nuovo utente
     const { data: newUser, error: insertError } = await supabase
-      .from('FLT_users')
+      .from('flt_users')
       .insert([validatedData])
       .select()
       .single();
@@ -101,13 +101,13 @@ export async function createFLTUser(req: Request, res: Response) {
   }
 }
 
-// ===== API per tabella FLT_games =====
+// ===== API per tabella flt_games =====
 
 // GET: Recupera tutti i giochi
 export async function getAllFLTGames(req: Request, res: Response) {
   try {
     const { data: games, error } = await supabase
-      .from('FLT_games')
+      .from('flt_games')
       .select('*')
       .order('created_at', { ascending: false });
 
@@ -126,7 +126,7 @@ export async function getFLTGame(req: Request, res: Response) {
     const { id } = req.params;
     
     const { data: game, error } = await supabase
-      .from('FLT_games')
+      .from('flt_games')
       .select('*, flt_game_settings(*)') // include le impostazioni del gioco
       .eq('id', id)
       .single();
@@ -155,7 +155,7 @@ export async function createFLTGame(req: Request, res: Response) {
     
     // Crea il gioco
     const { data: game, error } = await supabase
-      .from('FLT_games')
+      .from('flt_games')
       .insert([{
         ...validatedData
       }])
@@ -198,7 +198,7 @@ export async function updateFLTGame(req: Request, res: Response) {
     
     // Aggiorna il gioco
     const { data: updatedGame, error } = await supabase
-      .from('FLT_games')
+      .from('flt_games')
       .update(data)
       .eq('id', id)
       .select()
@@ -259,7 +259,7 @@ export async function toggleFLTGameStatus(req: Request, res: Response) {
     
     // Recupera lo stato attuale
     const { data: game, error: getError } = await supabase
-      .from('FLT_games')
+      .from('flt_games')
       .select('active')
       .eq('id', id)
       .single();
@@ -271,7 +271,7 @@ export async function toggleFLTGameStatus(req: Request, res: Response) {
     
     // Aggiorna il gioco
     const { data: updatedGame, error } = await supabase
-      .from('FLT_games')
+      .from('flt_games')
       .update({ active: newStatus })
       .eq('id', id)
       .select()
@@ -325,7 +325,7 @@ export async function saveGameSettings(req: Request, res: Response) {
     
     // Verifica se il gioco esiste
     const { data: game, error: gameError } = await supabase
-      .from('FLT_games')
+      .from('flt_games')
       .select('id')
       .eq('id', gameId)
       .single();
@@ -393,13 +393,13 @@ export async function saveGameSettings(req: Request, res: Response) {
   }
 }
 
-// ===== API per tabella FLT_rewards =====
+// ===== API per tabella flt_rewards =====
 
 // GET: Recupera tutti i premi
 export async function getAllFLTRewards(req: Request, res: Response) {
   try {
     const { data: rewards, error } = await supabase
-      .from('FLT_rewards')
+      .from('flt_rewards')
       .select('*')
       .order('created_at', { ascending: false });
 
@@ -418,7 +418,7 @@ export async function getGameFLTRewards(req: Request, res: Response) {
     const { gameId } = req.params;
     
     const { data: rewards, error } = await supabase
-      .from('FLT_rewards')
+      .from('flt_rewards')
       .select('*')
       .eq('game_id', gameId)
       .order('created_at', { ascending: false });
@@ -438,7 +438,7 @@ export async function getFLTReward(req: Request, res: Response) {
     const { id } = req.params;
     
     const { data: reward, error } = await supabase
-      .from('FLT_rewards')
+      .from('flt_rewards')
       .select('*')
       .eq('id', id)
       .single();
@@ -463,7 +463,7 @@ export async function createFLTReward(req: Request, res: Response) {
     const validatedData = insertFLTRewardSchema.parse(req.body);
     
     const { data: reward, error } = await supabase
-      .from('FLT_rewards')
+      .from('flt_rewards')
       .insert([validatedData])
       .select()
       .single();
@@ -488,7 +488,7 @@ export async function updateFLTReward(req: Request, res: Response) {
     const data = req.body;
     
     const { data: updatedReward, error } = await supabase
-      .from('FLT_rewards')
+      .from('flt_rewards')
       .update(data)
       .eq('id', id)
       .select()
@@ -514,7 +514,7 @@ export async function toggleFLTRewardStatus(req: Request, res: Response) {
     
     // Recupera lo stato attuale
     const { data: reward, error: getError } = await supabase
-      .from('FLT_rewards')
+      .from('flt_rewards')
       .select('active')
       .eq('id', id)
       .single();
@@ -526,7 +526,7 @@ export async function toggleFLTRewardStatus(req: Request, res: Response) {
     
     // Aggiorna il premio
     const { data: updatedReward, error } = await supabase
-      .from('FLT_rewards')
+      .from('flt_rewards')
       .update({ active: newStatus })
       .eq('id', id)
       .select()
