@@ -1,0 +1,13 @@
+{
+  "name": "Quiz Anni",
+  "description": "Indovina l'anno di pubblicazione di un libro",
+  "isActive": true,
+  "timerDuration": 30,
+  "questionCount": 5,
+  "weeklyLeaderboard": true,
+  "monthlyLeaderboard": true,
+  "reward": "Tazza Feltrinelli",
+  "gameType": "years",
+  "feltrinelliGameId": "00000000-0000-0000-0000-000000000001",
+  "difficulty": 1
+}
