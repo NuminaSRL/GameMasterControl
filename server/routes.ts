@@ -319,6 +319,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: `Error fetching user rewards: ${error instanceof Error ? error.message : 'Unknown error'}` });
     }
   });
+  
+  // Sincronizza premi da Feltrinelli al database locale
+  app.post('/api/feltrinelli/rewards/sync', async (req, res) => {
+    try {
+      const { gameType, period = 'all_time' } = req.body;
+      
+      if (!gameType || !['books', 'authors', 'years'].includes(gameType)) {
+        return res.status(400).json({ 
+          message: 'gameType is required and must be one of: books, authors, years' 
+        });
+      }
+      
+      // 1. Ottieni i premi da Feltrinelli
+      const gameId = feltrinelliApi.getGameIdByType(gameType);
+      const feltrinelliRewards = await feltrinelliApi.getAvailableRewards(gameId, period);
+      
+      // 2. Prepara il contatore dei risultati
+      const syncResults: {
+        totalFetched: number;
+        added: number;
+        updated: number;
+        failed: number;
+        details: Array<{
+          id?: number;
+          name: string;
+          action: string;
+          error?: string;
+        }>;
+      } = {
+        totalFetched: feltrinelliRewards.length,
+        added: 0,
+        updated: 0,
+        failed: 0,
+        details: []
+      };
+      
+      // 3. Sincronizza ogni premio
+      for (const reward of feltrinelliRewards) {
+        try {
+          // Verifica se esiste già un premio con questo ID Feltrinelli
+          const existingRewards = await storage.getAllRewards();
+          const existingReward = existingRewards.find(r => r.feltrinelliRewardId === reward.id);
+          
+          const rewardData = {
+            name: reward.name,
+            description: reward.description,
+            type: 'feltrinelli',
+            value: `Posizione ${reward.rank}`,
+            rank: reward.rank,
+            pointsRequired: reward.points_required,
+            icon: reward.rank <= 3 ? 'trophy' : 'award',
+            color: reward.rank === 1 ? '#FFD700' : reward.rank === 2 ? '#C0C0C0' : reward.rank === 3 ? '#CD7F32' : '#3B82F6',
+            available: 1,
+            gameType: gameType,
+            feltrinelliRewardId: reward.id,
+            originalImageUrl: reward.image_url,
+            isImported: true,
+            syncedAt: new Date()
+          };
+          
+          if (existingReward) {
+            // Aggiorna il premio esistente
+            await storage.updateReward(existingReward.id, rewardData);
+            syncResults.updated++;
+            syncResults.details.push({ id: existingReward.id, name: reward.name, action: 'updated' });
+          } else {
+            // Crea un nuovo premio
+            const newReward = await storage.createReward(rewardData as any);
+            syncResults.added++;
+            syncResults.details.push({ id: newReward.id, name: reward.name, action: 'added' });
+          }
+        } catch (error) {
+          syncResults.failed++;
+          syncResults.details.push({ 
+            name: reward.name, 
+            action: 'failed',
+            error: error instanceof Error ? error.message : 'Unknown error' 
+          });
+        }
+      }
+      
+      res.json({
+        success: true,
+        results: syncResults
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false,
+        message: `Error syncing rewards: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    }
+  });
 
   // === GAMES ENDPOINTS ===
   

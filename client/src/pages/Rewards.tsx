@@ -69,6 +69,10 @@ interface CustomReward {
   available: number;
   gameType: 'books' | 'authors' | 'years';
   feltrinelliRewardId: string | null;
+  isImported: boolean;
+  pointsRequired: number;
+  originalImageUrl: string | null;
+  syncedAt: string | null;
   createdAt: string;
 }
 
@@ -95,6 +99,7 @@ export default function RewardsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [currentReward, setCurrentReward] = useState<CustomReward | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { toast } = useToast();
 
   // Fetch rewards from Feltrinelli API
@@ -249,6 +254,49 @@ export default function RewardsPage() {
     });
     setIsEditDialogOpen(true);
   };
+  
+  // Synchronize rewards from Feltrinelli API to local database
+  const handleSyncRewards = async () => {
+    setIsSyncing(true);
+    try {
+      const response = await fetch("/api/feltrinelli/rewards/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          gameType,
+          period,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        toast({
+          title: "Sincronizzazione completata",
+          description: `Sono stati sincronizzati ${data.results.totalFetched} premi. Aggiunti: ${data.results.added}, Aggiornati: ${data.results.updated}`,
+        });
+        
+        // Refresh rewards list
+        queryClient.invalidateQueries({ queryKey: ['/api/rewards'] });
+      } else {
+        toast({
+          title: "Errore",
+          description: data.message || "Si è verificato un errore durante la sincronizzazione",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Errore",
+        description: "Si è verificato un errore durante la sincronizzazione",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Handle image upload
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -336,11 +384,29 @@ export default function RewardsPage() {
         
         <TabsContent value="feltrinelli" className="mt-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Premi Feltrinelli</CardTitle>
-              <CardDescription>
-                Questi premi sono forniti dall'API di Feltrinelli e vengono assegnati in base alle posizioni in classifica.
-              </CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Premi Feltrinelli</CardTitle>
+                <CardDescription>
+                  Questi premi sono forniti dall'API di Feltrinelli e vengono assegnati in base alle posizioni in classifica.
+                </CardDescription>
+              </div>
+              <Button 
+                onClick={() => handleSyncRewards()} 
+                disabled={isSyncing}
+              >
+                {isSyncing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Sincronizzazione...
+                  </>
+                ) : (
+                  <>
+                    <span className="mr-2">↻</span>
+                    Sincronizza
+                  </>
+                )}
+              </Button>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -489,6 +555,12 @@ export default function RewardsPage() {
                             alt={reward.name} 
                             className="h-32 w-32 object-contain mb-2"
                           />
+                        ) : reward.isImported && reward.originalImageUrl ? (
+                          <img 
+                            src={reward.originalImageUrl} 
+                            alt={reward.name} 
+                            className="h-32 w-32 object-contain mb-2"
+                          />
                         ) : (
                           <div className={`mb-2 p-4 rounded-full ${reward.rank === 1 ? 'bg-yellow-100' : reward.rank === 2 ? 'bg-gray-200' : reward.rank === 3 ? 'bg-amber-100' : 'bg-blue-100'}`}>
                             {getRewardIcon(reward.rank)}
@@ -517,28 +589,54 @@ export default function RewardsPage() {
                             <p className="text-sm">{translateGameType(reward.gameType)}</p>
                           </div>
                         </div>
-                        <div className="mt-4">
-                          <p className="text-sm font-medium">Disponibilità</p>
-                          <p className="text-lg font-bold">{reward.available}</p>
+                        <div className="mt-4 flex justify-between">
+                          <div>
+                            <p className="text-sm font-medium">Disponibilità</p>
+                            <p className="text-lg font-bold">{reward.available}</p>
+                          </div>
+                          {reward.isImported && (
+                            <div>
+                              <p className="text-sm font-medium">Punti richiesti</p>
+                              <p className="text-lg font-bold">{reward.pointsRequired}</p>
+                            </div>
+                          )}
                         </div>
                       </CardContent>
-                      <CardFooter className="bg-gray-50 border-t flex justify-between">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleEditReward(reward)}
-                        >
-                          <Edit className="h-4 w-4 mr-2" />
-                          Modifica
-                        </Button>
-                        <Button 
-                          variant="destructive" 
-                          size="sm"
-                          onClick={() => handleDeleteReward(reward.id)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Elimina
-                        </Button>
+                      <CardFooter className="bg-gray-50 border-t">
+                        <div className="w-full space-y-2">
+                          {reward.isImported && (
+                            <div className="flex items-center justify-center mb-2">
+                              <Badge variant="outline" className="bg-blue-50 text-blue-600 hover:bg-blue-50">
+                                Importato da Feltrinelli
+                              </Badge>
+                              {reward.syncedAt && (
+                                <span className="text-xs text-muted-foreground ml-2">
+                                  Sincronizzato: {new Date(reward.syncedAt).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <div className="flex justify-between">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleEditReward(reward)}
+                            >
+                              <Edit className="h-4 w-4 mr-2" />
+                              Modifica
+                            </Button>
+                            <Button 
+                              variant="destructive" 
+                              size="sm"
+                              onClick={() => handleDeleteReward(reward.id)}
+                              disabled={reward.isImported}
+                              title={reward.isImported ? "Non puoi eliminare un premio importato" : ""}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Elimina
+                            </Button>
+                          </div>
+                        </div>
                       </CardFooter>
                     </Card>
                   ))}
@@ -582,7 +680,11 @@ export default function RewardsPage() {
                     <FormItem>
                       <FormLabel>Nome</FormLabel>
                       <FormControl>
-                        <Input placeholder="Nome del premio" {...field} />
+                        <Input 
+                          placeholder="Nome del premio" 
+                          {...field} 
+                          disabled={currentReward?.isImported}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -624,7 +726,11 @@ export default function RewardsPage() {
                   <FormItem>
                     <FormLabel>Descrizione</FormLabel>
                     <FormControl>
-                      <Input placeholder="Descrizione del premio" {...field} />
+                      <Input 
+                        placeholder="Descrizione del premio" 
+                        {...field} 
+                        disabled={currentReward?.isImported}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -658,6 +764,7 @@ export default function RewardsPage() {
                           placeholder="Posizione in classifica" 
                           {...field}
                           onChange={(e) => field.onChange(parseInt(e.target.value))}
+                          disabled={currentReward?.isImported}
                         />
                       </FormControl>
                       <FormMessage />
@@ -696,6 +803,7 @@ export default function RewardsPage() {
                         <Select
                           value={field.value}
                           onValueChange={field.onChange}
+                          disabled={currentReward?.isImported}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Seleziona un tipo di gioco" />

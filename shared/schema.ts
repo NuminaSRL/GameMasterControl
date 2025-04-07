@@ -100,6 +100,10 @@ export const rewards = pgTable("rewards", {
   available: integer("available").notNull(),
   gameType: text("game_type", { enum: ["books", "authors", "years"] }).default('books'),
   feltrinelliRewardId: text("feltrinelli_reward_id"), // ID from Feltrinelli API if applicable
+  isImported: boolean("is_imported").default(false), // Indicates if this reward is imported from Feltrinelli
+  pointsRequired: integer("points_required").default(0), // Points required to earn this reward
+  originalImageUrl: text("original_image_url"), // Original image URL from Feltrinelli (if imported)
+  syncedAt: timestamp("synced_at"), // When this reward was last synced from Feltrinelli
   createdAt: timestamp("created_at").defaultNow(),
 });
 
