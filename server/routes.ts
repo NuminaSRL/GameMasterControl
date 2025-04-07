@@ -62,12 +62,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: `Error fetching game IDs: ${error instanceof Error ? error.message : 'Unknown error'}` });
     }
   });
-        res.status(503).json({ status: 'error', message: 'Server is not available' });
-      }
-    } catch (error) {
-      res.status(500).json({ status: 'error', message: `Error connecting to server: ${error instanceof Error ? error.message : 'Unknown error'}` });
-    }
-  });
   
   // Verifica connessione alle API di Feltrinelli
   app.get('/api/feltrinelli/health', async (req, res) => {
@@ -334,6 +328,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(rewards);
     } catch (error) {
       res.status(500).json({ message: `Error fetching user rewards: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+  
+  // === NUOVI ENDPOINT PER FELTRINELLI - GESTIONE GAMES, SETTINGS E BADGES ===
+  
+  // Ottieni tutti i giochi Feltrinelli
+  app.get('/api/feltrinelli/games', fltSimpleApi.getAllFLTGames);
+  
+  // Ottieni un gioco Feltrinelli specifico con le sue impostazioni
+  app.get('/api/feltrinelli/games/:id', fltSimpleApi.getFLTGame);
+  
+  // Ottieni le impostazioni di un gioco
+  app.get('/api/feltrinelli/game-settings/:gameId', fltSimpleApi.getGameSettings);
+  
+  // Ottieni tutti i premi Feltrinelli
+  app.get('/api/feltrinelli/rewards-all', fltSimpleApi.getAllFLTRewards);
+  
+  // Ottieni la classifica (leaderboard)
+  app.get('/api/feltrinelli/leaderboard-data', async (req, res) => {
+    try {
+      const { gameId, period = 'all_time', limit = 10 } = req.query;
+      
+      if (!gameId) {
+        return res.status(400).json({ message: 'gameId query parameter is required' });
+      }
+      
+      const { data: leaderboardEntries, error } = await supabase
+        .from('flt_leaderboard')
+        .select('*')
+        .eq('game_id', gameId)
+        .eq('period', period)
+        .order('points', { ascending: false })
+        .limit(Number(limit));
+      
+      if (error) {
+        console.error('Error fetching leaderboard:', error);
+        return res.json({ data: [] }); // Restituiamo un array vuoto invece di generare un errore
+      }
+      
+      res.json({ data: leaderboardEntries || [] });
+    } catch (error) {
+      console.error('Error in leaderboard endpoint:', error);
+      // Per evitare errori 500 al client, restituiamo un array vuoto
+      res.json({ data: [], error: `Error fetching leaderboard: ${error instanceof Error ? error.message : 'Unknown error'}` });
     }
   });
   
@@ -896,6 +934,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/flt/rewards', fltSimpleApi.createFLTReward);
   app.patch('/api/flt/rewards/:id', fltSimpleApi.updateFLTReward);
   app.post('/api/flt/rewards/:id/toggle', fltSimpleApi.toggleFLTRewardStatus);
+  
+  // NUOVI ENDPOINT RICHIESTI: /api/health, /api/health-check, /api/feltrinelli/health
+  if (!app._router.stack.some(r => r.route && r.route.path === '/api/health-check')) {
+    app.get('/api/health-check', async (req, res) => {
+      try {
+        const { count, error } = await supabase
+          .from('flt_games')
+          .select('*', { count: 'exact', head: true });
+        
+        if (error) {
+          return res.status(503).json({ status: 'error', message: 'Database connection failed' });
+        }
+        
+        res.json({ status: 'ok', message: 'Gaming Engine API is running' });
+      } catch (error) {
+        res.status(500).json({ status: 'error', message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}` });
+      }
+    });
+  }
+  
+  // Assicuriamoci che ci sia l'endpoint specifico per Feltrinelli
+  if (!app._router.stack.some(r => r.route && r.route.path === '/api/feltrinelli/health-check')) {
+    app.get('/api/feltrinelli/health-check', async (req, res) => {
+      try {
+        // Verifichiamo la connessione al database
+        const { count, error } = await supabase
+          .from('flt_games')
+          .select('*', { count: 'exact', head: true });
+        
+        if (error) {
+          return res.status(503).json({ status: 'error', message: 'Database connection failed' });
+        }
+        
+        // Controlliamo anche l'accessibilità dell'API Feltrinelli se configurata
+        const feltrinelliApiCheck = await feltrinelliApi.healthCheck().catch(() => false);
+        
+        res.json({ 
+          status: 'ok', 
+          message: 'Feltrinelli Gaming Engine API is running',
+          database_connection: 'ok',
+          feltrinelli_api_status: feltrinelliApiCheck ? 'connected' : 'not connected'
+        });
+      } catch (error) {
+        res.status(500).json({ status: 'error', message: `Error in health check: ${error instanceof Error ? error.message : 'Unknown error'}` });
+      }
+    });
+  }
 
   return httpServer;
 }
