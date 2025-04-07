@@ -6,6 +6,7 @@ import * as feltrinelliApi from "./feltrinelli-api";
 import { GAME_IDS } from "./feltrinelli-api";
 import * as fltApi from "./flt-api";
 import * as fltSimpleApi from "./flt-simple-api";
+import * as userProfileApi from "./user-profile-api";
 import { supabase } from "./supabase";
 import { db } from "./db";
 import { sql } from 'drizzle-orm';
@@ -352,6 +353,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Ottieni tutti i badges disponibili
   app.get('/api/feltrinelli/badges', fltSimpleApi.getAllBadges);
+  
+  // === NUOVI ENDPOINT PER PROFILI UTENTE CON REWARDS E BADGES ===
+  
+  // Ottieni profilo completo utente con rewards e badges
+  app.get('/api/feltrinelli/user-profile/:userId', userProfileApi.getUserProfile);
+  
+  // Ottieni badges dell'utente per un gioco specifico
+  app.get('/api/feltrinelli/user-game-badges/:userId/:gameId', userProfileApi.getUserGameBadges);
+  
+  // Ottieni rewards dell'utente per un gioco specifico
+  app.get('/api/feltrinelli/user-game-rewards/:userId/:gameId', userProfileApi.getUserGameRewards);
   
   // Ottieni la classifica (leaderboard) da Feltrinelli API
   app.get('/api/feltrinelli/leaderboard-data', async (req, res) => {
