@@ -33,4 +33,4 @@ ENV PORT=5000
 EXPOSE 5000
 
 # Start the server
-CMD ["npm", "run", "start"]
+CMD ["node", "dist/index.js"]
