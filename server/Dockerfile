@@ -20,17 +20,27 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy build artifacts from build stage
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/shared ./shared
+# Copia prima solo i file package per sfruttare la cache di Docker
+COPY package.json package-lock.json* ./
 
-# Environment variables
+# Installa le dipendenze incluse quelle di sviluppo (necessarie per il build)
+RUN npm install
+
+# Copia il resto del codice
+COPY . .
+
+# Crea una directory shared vuota (necessaria per il build)
+RUN mkdir -p ./shared
+
+# Esegui il build
+RUN npm run build
+
+# Imposta le variabili d'ambiente
 ENV NODE_ENV=production
 ENV PORT=5000
 
-# Expose the port
+# Esponi la porta
 EXPOSE 5000
 
-# Start the server
-CMD ["node", "dist/index.js"]
+# Avvia il server - usiamo npm esplicitamente per evitare problemi
+ENTRYPOINT ["npm", "run", "start"]
