@@ -5,8 +5,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "tsx index.ts",
-    "build": "esbuild index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
-    "start": "NODE_ENV=production node dist/index.js",
+    "build": "esbuild index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && cp -r ./shared ../shared ./dist/",
+    "start": "node dist/index.js",
     "check": "tsc",
     "db:push": "drizzle-kit push"
   },
@@ -25,9 +25,11 @@
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "postgres": "^3.4.5",
+    "typescript": "5.6.3",
     "ws": "^8.18.0",
     "zod": "^3.23.8",
-    "zod-validation-error": "^3.4.0"
+    "zod-validation-error": "^3.4.0",
+    "esbuild": "^0.25.0"
   },
   "devDependencies": {
     "@types/connect-pg-simple": "^7.0.3",
@@ -38,9 +40,7 @@
     "@types/passport-local": "^1.0.38",
     "@types/ws": "^8.5.13",
     "drizzle-kit": "^0.30.4",
-    "esbuild": "^0.25.0",
-    "tsx": "^4.19.1",
-    "typescript": "5.6.3"
+    "tsx": "^4.19.1"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
