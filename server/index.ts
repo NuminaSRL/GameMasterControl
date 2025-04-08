@@ -28,7 +28,7 @@ try {
 }
 
 // Verifica che le variabili d'ambiente necessarie siano presenti
-const requiredEnvVars = ['DATABASE_URL'];
+const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingVars.length > 0) {
