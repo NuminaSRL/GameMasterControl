@@ -10,6 +10,7 @@ import { db } from "./db";
 import { eq, and, or } from "drizzle-orm";
 import { SupabaseStorage } from "./supabase-storage";
 
+
 // Storage interface for all operations
 export interface IStorage {
   // User operations
@@ -352,36 +353,48 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
+
+
 // Scegli l'implementazione da utilizzare
 // Abilitiamo Supabase se sono configurate le variabili d'ambiente necessarie
-// IMPORTANTE: Prima di attivare Supabase, assicurati di aver eseguito manualmente
-// il file migration-script.sql nell'SQL Editor della dashboard di Supabase
-const useSupabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY;
+// o se siamo in ambiente di produzione
+const isProduction = process.env.NODE_ENV === 'production';
 
-// Variabile che determina quale storage usare
-// Se è presente solo DATABASE_URL, usa DatabaseStorage
-// Se sono presenti SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY, usa SupabaseStorage
-// Di default, usa DatabaseStorage se nessuna variabile è configurata
+console.log(`[Storage] Checking connection in ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} environment`);
+console.log(`[Storage] SUPABASE_URL: ${process.env.SUPABASE_URL ? 'Present' : 'Missing'}`);
+console.log(`[Storage] SUPABASE_SERVICE_ROLE_KEY: ${process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Present' : 'Missing'}`);
+console.log(`[Storage] DATABASE_URL: ${process.env.DATABASE_URL ? 'Present' : 'Missing'}`);
+
+// In produzione, forziamo l'utilizzo di Supabase
+if (isProduction && (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY)) {
+  console.log('[Storage] Production environment detected with missing Supabase credentials');
+  console.log('[Storage] Setting hardcoded Supabase credentials for production');
+  process.env.SUPABASE_URL = 'https://hdguwqhxbqssdtqgilmy.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkZ3V3cWh4YnFzc2R0cWdpbG15Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NDAwNzYxMSwiZXhwIjoyMDU5NTgzNjExfQ.JMMjfy1Vwj4QG_VBSUqlortWzQgcDn-Qod8gEy-l6rQ';
+}
+
+// Ricontrolliamo se abbiamo le credenziali Supabase ora
+const useSupabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 let selectedStorage: IStorage;
 
 try {
   if (useSupabase) {
-    console.log('Configurando Supabase Storage...');
+    console.log('[Storage] Configurando Supabase Storage...');
     selectedStorage = new SupabaseStorage();
-    console.log('Supabase Storage configurato correttamente');
+    console.log('[Storage] Supabase Storage configurato correttamente');
   } else if (process.env.DATABASE_URL) {
-    console.log('Configurando Database Storage con PostgreSQL...');
+    console.log('[Storage] Configurando Database Storage con PostgreSQL...');
     selectedStorage = new DatabaseStorage();
-    console.log('Database Storage configurato correttamente');
+    console.log('[Storage] Database Storage configurato correttamente');
   } else {
-    console.warn('Nessuna variabile d\'ambiente di connessione al database trovata');
-    console.warn('Utilizzando Database Storage con connessione di default');
+    console.warn('[Storage] Nessuna variabile d\'ambiente di connessione al database trovata');
+    console.warn('[Storage] Utilizzando Database Storage con connessione di default');
     selectedStorage = new DatabaseStorage();
   }
 } catch (error) {
-  console.error('Errore nella configurazione dello storage:', error);
-  console.warn('Ripiegando su Database Storage...');
+  console.error('[Storage] Errore nella configurazione dello storage:', error);
+  console.warn('[Storage] Ripiegando su Database Storage...');
   selectedStorage = new DatabaseStorage();
 }
 
