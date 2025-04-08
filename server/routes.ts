@@ -7,9 +7,10 @@ import { GAME_IDS } from "./feltrinelli-api";
 import * as fltApi from "./flt-api";
 import * as fltSimpleApi from "./flt-simple-api";
 import * as userProfileApi from "./user-profile-api";
-import { supabase } from "./supabase";
+import { supabase, safeSupabaseQuery } from './supabase';
 import { db } from "./db";
 import { sql } from 'drizzle-orm';
+import crypto from 'crypto';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Create HTTP server
@@ -35,50 +36,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Health check secondario
-  app.get('/api/health-check', async (req, res) => {
-    try {
-      res.json({ status: 'ok', message: 'Server is running' });
-    } catch (error) {
-      res.status(500).json({ status: 'error', message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}` });
-    }
-  });
+
   
-  // Health check specifico per Feltrinelli
-  app.get('/api/feltrinelli/health', async (req, res) => {
-    try {
-      res.json({ status: 'ok', message: 'Feltrinelli Gaming Engine API is running' });
-    } catch (error) {
-      res.status(500).json({ status: 'error', message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}` });
-    }
-  });
+
+
   
-  // Ottieni IDs dei giochi
-  app.get('/api/feltrinelli/game-ids', (req, res) => {
-    try {
-      res.json({
-        books: GAME_IDS.BOOK_QUIZ,
-        authors: GAME_IDS.AUTHOR_QUIZ,
-        years: GAME_IDS.YEAR_QUIZ
-      });
-    } catch (error) {
-      res.status(500).json({ message: `Error fetching game IDs: ${error instanceof Error ? error.message : 'Unknown error'}` });
-    }
-  });
-  
-  // Verifica connessione alle API di Feltrinelli
-  app.get('/api/feltrinelli/health', async (req, res) => {
-    try {
-      const isHealthy = await feltrinelliApi.healthCheck();
-      if (isHealthy) {
-        res.json({ status: 'ok', message: 'Feltrinelli Gaming API is connected' });
-      } else {
-        res.status(503).json({ status: 'error', message: 'Feltrinelli Gaming API is not available' });
-      }
-    } catch (error) {
-      res.status(500).json({ status: 'error', message: `Error connecting to Feltrinelli API: ${error instanceof Error ? error.message : 'Unknown error'}` });
-    }
-  });
+
 
   // Sessione di gioco - sia con /api/games/session che con /api/feltrinelli/session
   app.post('/api/games/session', async (req, res) => {
@@ -735,11 +698,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/v1/games/bookquiz/question', (req, res) => fltApi.getBookQuizQuestion(req, res));
   app.post('/api/v1/games/bookquiz/answer', (req, res) => fltApi.submitBookQuizAnswer(req, res));
 
-  // Leaderboard
-  app.get('/api/v1/leaderboard', (req, res) => fltApi.getLeaderboard(req, res));
-  app.get('/api/v1/leaderboard/:gameId', (req, res) => fltApi.getGameLeaderboard(req, res));
-  app.post('/api/v1/leaderboard/submit', (req, res) => fltApi.submitScore(req, res));
-  app.post('/api/v1/leaderboard/submit-all-periods', (req, res) => fltApi.submitScoreAllPeriods(req, res));
+
 
   // Rewards
   app.get('/api/v1/rewards/available', (req, res) => fltApi.getAvailableRewards(req, res));
@@ -749,9 +708,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/v1/profile/import', (req, res) => fltApi.importFeltrinelliUserProfile(req, res));
 
   // Inizializzazione delle tabelle FLT al riavvio del server
-  fltApi.initFeltrinelliTables().catch(error => {
+ /* fltApi.initFeltrinelliTables().catch(error => {
     console.error('Errore durante inizializzazione tabelle Feltrinelli:', error);
-  });
+  });*/
 
   // === BACKOFFICE API PER FELTRINELLI MAPPING ===
 
@@ -916,10 +875,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Ottieni tutti i profili utente
   app.get('/api/feltrinelli-mapping/user-profiles', async (req, res) => {
     try {
-      const { data } = await supabase
+      // Using direct supabase query as in your original code
+      const { data, error } = await supabase
         .from('flt_user_profiles')
         .select('*')
         .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching Feltrinelli user profiles:', error);
+        return res.status(500).json({ error: 'Failed to fetch Feltrinelli user profiles' });
+      }
 
       const formattedProfiles = data?.map(profile => ({
         id: profile.id,
@@ -964,10 +929,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/flt/rewards/:id/toggle', fltSimpleApi.toggleFLTRewardStatus);
   
   // NUOVI ENDPOINT RICHIESTI: /api/health, /api/health-check, /api/feltrinelli/health
-  if (!app._router.stack.some(r => r.route && r.route.path === '/api/health-check')) {
+  if (!app._router || !app._router.stack || !app._router.stack.some((r: any) => r.route && r.route.path === '/api/health-check')) {
     app.get('/api/health-check', async (req, res) => {
       try {
-        const { count, error } = await supabase
+        const { data, error } = await supabase
           .from('flt_games')
           .select('*', { count: 'exact', head: true });
         
@@ -985,8 +950,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // === Endpoint specifici per l'integrazione con Feltrinelli ===
   
   // Endpoint health check
-  if (!app._router.stack.some(r => r.route && r.route.path === '/api/feltrinelli/health')) {
-    app.get('/api/feltrinelli/health', async (req, res) => {
+  if (!app._router || !app._router.stack || !app._router.stack.some((r: any) => r.route && r.route.path === '/api/health-check')) {
+    app.get('/api/health-check', async (req, res) => {
       try {
         // Verifichiamo la connessione al database
         const { count, error } = await supabase
@@ -999,7 +964,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Controlliamo anche l'accessibilità dell'API Feltrinelli se configurata
         const feltrinelliApiCheck = await feltrinelliApi.healthCheck().catch(() => false);
-        
+      
         res.json({ 
           status: 'ok', 
           message: 'Feltrinelli Gaming Engine API is running',
@@ -1013,7 +978,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
   
   // Endpoint per recuperare tutti i giochi disponibili
-  if (!app._router.stack.some(r => r.route && r.route.path === '/api/feltrinelli/games')) {
+  if (!app._router || !app._router.stack || !app._router.stack.some((r: any) => r.route && r.route.path === '/api/feltrinelli/games')) {
     app.get('/api/feltrinelli/games', async (req, res) => {
       try {
         // Recuperiamo solo i giochi attivi
@@ -1042,23 +1007,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
   
   // Endpoint per recuperare tutti gli ID dei giochi come array
-  if (!app._router.stack.some(r => r.route && r.route.path === '/api/feltrinelli/game-ids')) {
+  if (!app._router || !app._router.stack || !app._router.stack.some((r: any) => r.route && r.route.path === '/api/feltrinelli/game-ids')) {
     app.get('/api/feltrinelli/game-ids', async (req, res) => {
       try {
-        // Utilizziamo una query SQL diretta per evitare problemi con i nomi delle colonne
-        const gameIds = await db.execute(
-          sql`SELECT id, feltrinelli_id, name, is_active FROM flt_games ORDER BY name ASC`
-        ).catch(err => {
-          console.error("Database error getting game IDs:", err);
-          return { rows: [] };
-        });
+        // Use supabase instead of db.execute with sql
+        const { data, error } = await supabase
+          .from('flt_games')
+          .select('feltrinelli_id, name, is_active')
+          .order('name', { ascending: true });
         
-        const formattedGames = gameIds.rows && gameIds.rows.length > 0 ? 
-          gameIds.rows.map(game => ({
-            id: game.feltrinelli_id,
-            name: game.name,
-            active: game.is_active
-          })) : [];
+        if (error) throw error;
+        
+        const formattedGames = data ? data.map(game => ({
+          id: game.feltrinelli_id,
+          name: game.name,
+          active: game.is_active
+        })) : [];
         
         res.json(formattedGames);
       } catch (error) {
@@ -1074,7 +1038,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
   
   // Endpoint che restituisce gli ID dei giochi come oggetto (compatibilità)
-  if (!app._router.stack.some(r => r.route && r.route.path === '/api/feltrinelli/game-ids-v1')) {
+  if (!app._router || !app._router.stack || !app._router.stack.some((r: any) => r.route && r.route.path === '/api/feltrinelli/game-ids-v1')) {
     app.get('/api/feltrinelli/game-ids-v1', async (req, res) => {
       try {
         // Questo formato è usato dalla versione originale dell'API e deve restare così
@@ -1094,7 +1058,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
   
   // Endpoint per recuperare tutti i premi disponibili
-  if (!app._router.stack.some(r => r.route && r.route.path === '/api/feltrinelli/rewards')) {
+  if (!app._router || !app._router.stack || !app._router.stack.some((r: any) => r.route && r.route.path === '/api/feltrinelli/rewards')) {
     app.get('/api/feltrinelli/rewards', async (req, res) => {
       try {
         const { data, error } = await supabase
@@ -1129,7 +1093,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
   
   // Endpoint per recuperare i premi di un utente specifico
-  if (!app._router.stack.some(r => r.route && r.route.path === '/api/feltrinelli/rewards/user/:userId')) {
+  if (!app._router || !app._router.stack || !app._router.stack.some((r: any) => r.route && r.route.path === '/api/feltrinelli/rewards/user/:userId')) {
     app.get('/api/feltrinelli/rewards/user/:userId', async (req, res) => {
       try {
         const { userId } = req.params;
@@ -1141,23 +1105,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Recupera i premi assegnati a questo utente
         const { data, error } = await supabase
           .from('flt_user_rewards')
-          .select('reward_id, awarded_at, flt_rewards(id, name, description, type, value, icon, color, image_url)')
+          .select(`
+            *,
+            flt_rewards (*)
+          `)
           .eq('user_id', userId);
         
         if (error) throw error;
         
         // Formatta i risultati
-        const userRewards = data?.map(record => ({
-          id: record.flt_rewards.id,
-          name: record.flt_rewards.name,
-          description: record.flt_rewards.description,
-          type: record.flt_rewards.type,
-          value: record.flt_rewards.value,
-          icon: record.flt_rewards.icon,
-          color: record.flt_rewards.color,
-          image_url: record.flt_rewards.image_url || null,
-          awarded_at: record.awarded_at
-        })) || [];
+        const userRewards = data?.map(record => {
+          // Verifichiamo che record.flt_rewards esista
+          if (!record.flt_rewards) {
+            console.warn(`Premio mancante per il record: ${JSON.stringify(record)}`);
+            return null;
+          }
+          
+          return {
+            id: record.flt_rewards.id,
+            name: record.flt_rewards.name,
+            description: record.flt_rewards.description,
+            type: record.flt_rewards.type,
+            value: record.flt_rewards.value,
+            icon: record.flt_rewards.icon,
+            color: record.flt_rewards.color,
+            image_url: record.flt_rewards.image_url || null,
+            awarded_at: record.awarded_at || record.created_at
+          };
+        })
+        .filter(Boolean) || []; // Filtriamo eventuali valori null
         
         res.json(userRewards);
       } catch (error) {

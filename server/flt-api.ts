@@ -1,20 +1,8 @@
 import { Request, Response } from "express";
-import { 
-  Game, FltGame, FltGameSession, InsertFltGameSession, 
-  FltUserProfile, InsertFltUserProfile, 
-  FltLeaderboard, FltUserReward
-} from "@shared/schema";
-import { db } from "./db";
-import { eq, and, desc, or } from "drizzle-orm";
-import { 
-  fltGameSessions, fltGames, fltUserProfiles, 
-  fltLeaderboard, fltUserRewards, fltAnswerOptions,
-  games, rewards
-} from "@shared/schema";
-import { supabase } from "./supabase";
+import { supabase, safeSupabaseQuery } from "./supabase";
 import { z } from "zod";
+import crypto from "crypto"; // Aggiungiamo l'import di crypto
 
-// TIPI PER LE API
 
 export interface GameSessionResponse {
   session_id: string;
@@ -124,57 +112,54 @@ export async function createGameSession(req: Request, res: Response) {
     const { user_id, game_id } = validatedData;
 
     // Verifica che l'utente esista
-    const userProfile = await db.query.fltUserProfiles.findFirst({
-      where: eq(fltUserProfiles.userId, user_id)
-    });
+    const { data: userProfile, error: userError } = await supabase
+      .from('flt_users')
+      .select('*')
+      .eq('user_id', user_id)
+      .single();
 
-    if (!userProfile) {
+    if (userError || !userProfile) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Verifica che il gioco esista e sia mappato
-    const gameMapping = await db.query.fltGames.findFirst({
-      where: eq(fltGames.feltrinelliId, game_id)
-    });
+    // Verifica che il gioco esista e sia attivo
+    const { data: gameData, error: gameError } = await supabase
+      .from('flt_games')
+      .select('*')
+      .eq('id', game_id)
+      .eq('is_active', true)
+      .single();
 
-    if (!gameMapping) {
-      return res.status(404).json({ error: "Game not found" });
-    }
-
-    // Verifica che il gioco interno sia attivo
-    const internalGame = await db.query.games.findFirst({
-      where: and(
-        eq(games.id, gameMapping.internalId),
-        eq(games.isActive, true)
-      )
-    });
-
-    if (!internalGame) {
-      return res.status(403).json({ error: "Game is not active" });
+    if (gameError || !gameData) {
+      return res.status(404).json({ error: "Game not found or not active" });
     }
 
     // Crea una nuova sessione
     const sessionId = crypto.randomUUID();
-    const newSession: InsertFltGameSession = {
-      id: crypto.randomUUID(),
-      sessionId,
-      userId: user_id,
-      gameId: game_id,
-      internalGameId: gameMapping.internalId,
-      score: 0,
-      completed: false
-    };
+    const { data: insertedSession, error: sessionError } = await supabase
+      .from('flt_game_sessions')
+      .insert({
+        id: crypto.randomUUID(),
+        session_id: sessionId,
+        user_id: user_id,
+        game_id: game_id,
+        score: 0,
+        completed: false
+      })
+      .select()
+      .single();
 
-    const [insertedSession] = await db.insert(fltGameSessions)
-      .values(newSession)
-      .returning();
+    if (sessionError) {
+      console.error("Error creating game session:", sessionError);
+      return res.status(500).json({ error: "Failed to create game session" });
+    }
 
     // Formatta la risposta come previsto dall'API Feltrinelli
     const response: GameSessionResponse = {
-      session_id: insertedSession.sessionId,
-      user_id: insertedSession.userId,
-      game_id: insertedSession.gameId,
-      created_at: insertedSession.createdAt.toISOString(),
+      session_id: insertedSession.session_id,
+      user_id: insertedSession.user_id,
+      game_id: insertedSession.game_id,
+      created_at: insertedSession.created_at,
       score: insertedSession.score,
       completed: insertedSession.completed
     };
@@ -192,16 +177,15 @@ export async function getBookQuizQuestion(req: Request, res: Response) {
   try {
     const difficulty = parseInt(req.query.difficulty as string) || 1;
     
-    // Recupera il gioco interno per il tipo "books"
-    const bookGame = await db.query.games.findFirst({
-      where: and(
-        eq(games.gameType, "books"),
-        eq(games.isActive, true),
-        eq(games.difficulty, difficulty)
-      )
-    });
+    // Recupera il gioco per il tipo "books"
+    const { data: bookGame, error: gameError } = await supabase
+      .from('flt_games')
+      .select('*')
+      .eq('game_type', 'books')
+      .eq('is_active', true)
+      .single();
 
-    if (!bookGame) {
+    if (gameError || !bookGame) {
       return res.status(404).json({ error: "No active book quiz game found" });
     }
 
@@ -241,19 +225,32 @@ export async function getBookQuizQuestion(req: Request, res: Response) {
     };
 
     // Registriamo la domanda e le risposte per poterle verificare in seguito
-    // Normalmente salveremmo queste informazioni nel database
     const correctOptionId = question.options[1].id; // 1984 è la risposta corretta
-    
-    for (const option of question.options) {
-      await db.insert(fltAnswerOptions).values({
-        id: option.id,
-        questionId,
-        bookId: option.id, // Usiamo lo stesso ID come book ID per semplicità
-        isCorrect: option.id === correctOptionId
-      });
-    }
 
+    try {
+      for (const option of question.options) {
+        const { error } = await supabase
+          .from('flt_answer_options')
+          .insert({
+            id: option.id,
+            question_id: questionId,
+            book_id: option.id, // Usiamo lo stesso ID come book ID per semplicità
+            is_correct: option.id === correctOptionId
+          });
+          
+        if (error) {
+          console.warn(`Errore nell'inserimento dell'opzione ${option.id}:`, error.message);
+          // Continuiamo con le altre opzioni anche se una fallisce
+        }
+      }
+    } catch (insertError) {
+      console.error("Errore durante l'inserimento delle opzioni:", insertError);
+      // Non facciamo fallire l'intera richiesta se l'inserimento delle opzioni fallisce
+    }
+    
+    // Aggiungi questo return che mancava
     return res.json(question);
+    
   } catch (error) {
     console.error("Error getting book quiz question:", error);
     return res.status(500).json({ error: "Failed to get book quiz question" });
@@ -273,29 +270,31 @@ export async function submitBookQuizAnswer(req: Request, res: Response) {
     const { session_id, question_id, answer_option_id, time_taken } = validatedData;
 
     // Verifica che la sessione esista
-    const session = await db.query.fltGameSessions.findFirst({
-      where: eq(fltGameSessions.sessionId, session_id)
-    });
+    const { data: session, error: sessionError } = await supabase
+      .from('flt_game_sessions')
+      .select('*')
+      .eq('session_id', session_id)
+      .single();
 
-    if (!session) {
+    if (sessionError || !session) {
       return res.status(404).json({ error: "Session not found" });
     }
 
     // Verifica la risposta
-    const answerOption = await db.query.fltAnswerOptions.findFirst({
-      where: and(
-        eq(fltAnswerOptions.id, answer_option_id),
-        eq(fltAnswerOptions.questionId, question_id)
-      )
-    });
+    const { data: answerOption, error: answerError } = await supabase
+      .from('flt_answer_options')
+      .select('*')
+      .eq('id', answer_option_id)
+      .eq('question_id', question_id)
+      .single();
 
-    if (!answerOption) {
+    if (answerError || !answerOption) {
       return res.status(404).json({ error: "Answer option not found" });
     }
 
     // Calcoliamo i punti in base alla correttezza e al tempo
     let points = 0;
-    if (answerOption.isCorrect) {
+    if (answerOption.is_correct) {
       // Punteggio base per risposta corretta
       points = 1;
       
@@ -306,16 +305,15 @@ export async function submitBookQuizAnswer(req: Request, res: Response) {
     }
 
     // Aggiorniamo il punteggio della sessione
-    await db.update(fltGameSessions)
-      .set({ 
-        score: session.score + points
-      })
-      .where(eq(fltGameSessions.id, session.id));
+    await supabase
+      .from('flt_game_sessions')
+      .update({ score: session.score + points })
+      .eq('id', session.id);
 
     // Rispondiamo con il risultato
     return res.json({
-      is_correct: answerOption.isCorrect,
-      message: answerOption.isCorrect ? "Risposta corretta!" : "Risposta errata!",
+      is_correct: answerOption.is_correct,
+      message: answerOption.is_correct ? "Risposta corretta!" : "Risposta errata!",
       points
     });
   } catch (error) {
@@ -326,32 +324,48 @@ export async function submitBookQuizAnswer(req: Request, res: Response) {
 
 // LEADERBOARD
 
+// LEADERBOARD
+
 export async function getLeaderboard(req: Request, res: Response) {
   try {
     const period = (req.query.period as string) || "all_time";
     const limit = parseInt(req.query.limit as string) || 10;
 
-    const leaderboardEntries = await db.query.fltLeaderboard.findMany({
-      where: eq(fltLeaderboard.period, period),
-      orderBy: [desc(fltLeaderboard.points)],
-      limit
-    });
+    // Utilizziamo direttamente supabase invece di safeSupabaseQuery
+    const { data: leaderboardEntries, error } = await supabase
+      .from('flt_leaderboard')
+      .select('*')
+      .eq('period', period)
+      .order('points', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error("Error fetching leaderboard:", error);
+      return res.status(500).json({ error: "Failed to get leaderboard" });
+    }
+
+    // Verifichiamo che leaderboardEntries non sia null
+    if (!leaderboardEntries || leaderboardEntries.length === 0) {
+      return res.json({ data: [] });
+    }
 
     const formattedEntries: LeaderboardEntry[] = await Promise.all(
       leaderboardEntries.map(async entry => {
         // Recupera le informazioni utente
-        const userProfile = await db.query.fltUserProfiles.findFirst({
-          where: eq(fltUserProfiles.userId, entry.userId)
-        });
+        const { data: userProfile } = await supabase
+          .from('flt_users')
+          .select('*')
+          .eq('user_id', entry.user_id)
+          .single();
 
         return {
-          id: entry.id.toString(),
-          user_id: entry.userId,
-          game_id: entry.gameId,
+          id: entry.id,
+          user_id: entry.user_id,
+          game_id: entry.game_id,
           points: entry.points,
           users: {
             username: userProfile?.username || "Unknown",
-            avatar_url: userProfile?.avatarUrl || null
+            avatar_url: userProfile?.avatar_url || null
           }
         };
       })
@@ -361,304 +375,6 @@ export async function getLeaderboard(req: Request, res: Response) {
   } catch (error) {
     console.error("Error getting leaderboard:", error);
     return res.status(500).json({ error: "Failed to get leaderboard" });
-  }
-}
-
-export async function getGameLeaderboard(req: Request, res: Response) {
-  try {
-    const gameId = req.params.gameId;
-    const period = (req.query.period as string) || "all_time";
-    const limit = parseInt(req.query.limit as string) || 10;
-
-    const leaderboardEntries = await db.query.fltLeaderboard.findMany({
-      where: and(
-        eq(fltLeaderboard.gameId, gameId),
-        eq(fltLeaderboard.period, period)
-      ),
-      orderBy: [desc(fltLeaderboard.points)],
-      limit
-    });
-
-    const formattedEntries: LeaderboardEntry[] = await Promise.all(
-      leaderboardEntries.map(async entry => {
-        // Recupera le informazioni utente
-        const userProfile = await db.query.fltUserProfiles.findFirst({
-          where: eq(fltUserProfiles.userId, entry.userId)
-        });
-
-        return {
-          id: entry.id.toString(),
-          user_id: entry.userId,
-          game_id: entry.gameId,
-          points: entry.points,
-          users: {
-            username: userProfile?.username || "Unknown",
-            avatar_url: userProfile?.avatarUrl || null
-          }
-        };
-      })
-    );
-
-    return res.json({ data: formattedEntries });
-  } catch (error) {
-    console.error("Error getting game leaderboard:", error);
-    return res.status(500).json({ error: "Failed to get game leaderboard" });
-  }
-}
-
-export async function submitScore(req: Request, res: Response) {
-  try {
-    const schema = z.object({
-      userId: z.string().uuid(),
-      gameId: z.string().uuid(),
-      correctAnswers: z.number(),
-      totalQuestions: z.number(),
-      sessionId: z.string().uuid()
-    });
-
-    const validatedData = schema.parse(req.body);
-    const { userId, gameId, correctAnswers, totalQuestions, sessionId } = validatedData;
-
-    // Verifica che la sessione esista
-    const session = await db.query.fltGameSessions.findFirst({
-      where: eq(fltGameSessions.sessionId, sessionId)
-    });
-
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
-
-    // Calcola il punteggio finale
-    const finalScore = Math.round((correctAnswers / totalQuestions) * 100);
-
-    // Aggiorna la sessione
-    await db.update(fltGameSessions)
-      .set({ 
-        score: finalScore,
-        completed: true,
-        updatedAt: new Date()
-      })
-      .where(eq(fltGameSessions.id, session.id));
-
-    // Aggiorna il punteggio nella leaderboard
-    const existingEntry = await db.query.fltLeaderboard.findFirst({
-      where: and(
-        eq(fltLeaderboard.userId, userId),
-        eq(fltLeaderboard.gameId, gameId),
-        eq(fltLeaderboard.period, "all_time")
-      )
-    });
-
-    if (existingEntry) {
-      // Aggiorna solo se il nuovo punteggio è migliore
-      if (finalScore > existingEntry.points) {
-        await db.update(fltLeaderboard)
-          .set({ 
-            points: finalScore,
-            updatedAt: new Date()
-          })
-          .where(eq(fltLeaderboard.id, existingEntry.id));
-      }
-    } else {
-      // Crea un nuovo record
-      await db.insert(fltLeaderboard).values({
-        userId,
-        gameId,
-        internalGameId: session.internalGameId,
-        points: finalScore,
-        period: "all_time"
-      });
-    }
-
-    return res.json({
-      success: true,
-      message: "Punteggio aggiornato con successo"
-    });
-  } catch (error) {
-    console.error("Error submitting score:", error);
-    return res.status(500).json({ error: "Failed to submit score" });
-  }
-}
-
-export async function submitScoreAllPeriods(req: Request, res: Response) {
-  try {
-    const schema = z.object({
-      userId: z.string().uuid(),
-      gameId: z.string().uuid(),
-      correctAnswers: z.number(),
-      totalQuestions: z.number(),
-      sessionId: z.string().uuid()
-    });
-
-    const validatedData = schema.parse(req.body);
-    const { userId, gameId, correctAnswers, totalQuestions, sessionId } = validatedData;
-
-    // Verifica che la sessione esista
-    const session = await db.query.fltGameSessions.findFirst({
-      where: eq(fltGameSessions.sessionId, sessionId)
-    });
-
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
-
-    // Calcola il punteggio finale
-    const finalScore = Math.round((correctAnswers / totalQuestions) * 100);
-
-    // Aggiorna la sessione
-    await db.update(fltGameSessions)
-      .set({ 
-        score: finalScore,
-        completed: true,
-        updatedAt: new Date()
-      })
-      .where(eq(fltGameSessions.id, session.id));
-
-    // Ottieni il gioco interno associato
-    const internalGame = await db.query.games.findFirst({
-      where: eq(games.id, session.internalGameId)
-    });
-
-    if (!internalGame) {
-      return res.status(404).json({ error: "Internal game not found" });
-    }
-
-    // Periodi da aggiornare
-    const periods = ["all_time"];
-    if (internalGame.weeklyLeaderboard) periods.push("weekly");
-    if (internalGame.monthlyLeaderboard) periods.push("monthly");
-
-    // Aggiorna tutti i periodi richiesti
-    for (const period of periods) {
-      const existingEntry = await db.query.fltLeaderboard.findFirst({
-        where: and(
-          eq(fltLeaderboard.userId, userId),
-          eq(fltLeaderboard.gameId, gameId),
-          eq(fltLeaderboard.period, period)
-        )
-      });
-
-      if (existingEntry) {
-        // Aggiorna solo se il nuovo punteggio è migliore
-        if (finalScore > existingEntry.points) {
-          await db.update(fltLeaderboard)
-            .set({ 
-              points: finalScore,
-              updatedAt: new Date()
-            })
-            .where(eq(fltLeaderboard.id, existingEntry.id));
-        }
-      } else {
-        // Crea un nuovo record
-        await db.insert(fltLeaderboard).values({
-          userId,
-          gameId,
-          internalGameId: session.internalGameId,
-          points: finalScore,
-          period
-        });
-      }
-    }
-
-    return res.json({
-      success: true,
-      message: "Punteggio aggiornato per tutti i periodi"
-    });
-  } catch (error) {
-    console.error("Error submitting score for all periods:", error);
-    return res.status(500).json({ error: "Failed to submit score for all periods" });
-  }
-}
-
-// REWARDS
-
-export async function getAvailableRewards(req: Request, res: Response) {
-  try {
-    const gameId = req.query.game_id as string;
-    const period = req.query.period as string || "all_time";
-
-    if (!gameId) {
-      return res.status(400).json({ error: "Game ID is required" });
-    }
-
-    // Ottieni il gioco interno associato
-    const gameMapping = await db.query.fltGames.findFirst({
-      where: eq(fltGames.feltrinelliId, gameId)
-    });
-
-    if (!gameMapping) {
-      return res.status(404).json({ error: "Game not found" });
-    }
-
-    // Recupera i premi disponibili per questo gioco
-    const availableRewards = await db.query.rewards.findMany({
-      where: or(
-        eq(rewards.gameType, "books"),  // Per semplificare, includiamo tutti i tipi di gioco
-        eq(rewards.gameType, "authors"),
-        eq(rewards.gameType, "years")
-      )
-    });
-
-    // Formatta i premi per la risposta
-    const formattedRewards: RewardItem[] = availableRewards.map((reward, index) => ({
-      id: reward.id.toString(),
-      name: reward.name,
-      description: reward.description,
-      image_url: reward.originalImageUrl || reward.imageUrl || "",
-      points_required: reward.pointsRequired,
-      rank: reward.rank || index + 1
-    }));
-
-    return res.json({
-      success: true,
-      rewards: formattedRewards
-    });
-  } catch (error) {
-    console.error("Error getting available rewards:", error);
-    return res.status(500).json({ error: "Failed to get available rewards" });
-  }
-}
-
-export async function getUserRewards(req: Request, res: Response) {
-  try {
-    const userId = req.params.userId;
-
-    if (!userId) {
-      return res.status(400).json({ error: "User ID is required" });
-    }
-
-    // Recupera i premi dell'utente
-    const userRewards = await db.query.fltUserRewards.findMany({
-      where: eq(fltUserRewards.userId, userId),
-      with: {
-        reward: true,
-        game: true
-      }
-    });
-
-    // Formatta i premi per la risposta
-    const formattedRewards = userRewards.map(userReward => ({
-      id: userReward.id.toString(),
-      user_id: userReward.userId,
-      reward_id: userReward.rewardId.toString(),
-      game_id: userReward.gameId,
-      period: userReward.period,
-      rank: userReward.rank,
-      claimed_at: userReward.claimedAt.toISOString(),
-      rewards: {
-        name: userReward.reward.name,
-        description: userReward.reward.description,
-        image_url: userReward.reward.originalImageUrl || userReward.reward.imageUrl || ""
-      }
-    }));
-
-    return res.json({
-      success: true,
-      rewards: formattedRewards
-    });
-  } catch (error) {
-    console.error("Error getting user rewards:", error);
-    return res.status(500).json({ error: "Failed to get user rewards" });
   }
 }
 
@@ -674,11 +390,11 @@ export async function importFeltrinelliUserProfile(req: Request, res: Response) 
     });
 
     const validatedData = schema.parse(req.body);
-    const { user_id } = validatedData;
+    const { user_id, username, email, avatar_url } = validatedData;
 
-    // Verifica se esiste già nel semplice formato richiesto
+    // Verifica se esiste già
     const { data: existingProfile, error } = await supabase
-      .from('user_profiles')
+      .from('flt_users')
       .select('*')
       .eq('user_id', user_id)
       .single();
@@ -692,13 +408,16 @@ export async function importFeltrinelliUserProfile(req: Request, res: Response) 
       });
     }
 
-    // Crea un nuovo profilo semplificato
+    // Crea un nuovo profilo
     const { data: insertedProfile, error: insertError } = await supabase
-      .from('user_profiles')
-      .insert([{
+      .from('flt_users')
+      .insert({
         id: crypto.randomUUID(),
-        user_id: user_id
-      }])
+        user_id: user_id,
+        username: username || `user_${user_id.substring(0, 8)}`,
+        email: email,
+        avatar_url: avatar_url
+      })
       .select()
       .single();
 
@@ -721,156 +440,146 @@ export async function importFeltrinelliUserProfile(req: Request, res: Response) 
 // Inizializzazione tabelle
 export async function initFeltrinelliTables() {
   try {
-    console.log("Inizializzazione tabelle Feltrinelli");
+    console.log("Verifica connessione a Supabase");
     
-    // Crea le tabelle Feltrinelli se non esistono
-    await createFeltrinelliTables();
-    
-    // Verifica se non ci sono giochi mappati e crea mappature predefinite
-    const existingMappings = await db.query.fltGames.findMany();
-    
-    if (existingMappings.length === 0) {
-      console.log("Creazione mappature predefinite per i giochi Feltrinelli");
-      
-      // Recupera i giochi interni
-      const internalGames = await db.query.games.findMany({
-        where: eq(games.isActive, true)
-      });
-      
-      // Mappatura predefinita tra gli ID Feltrinelli e i nostri giochi
-      const defaultMappings = [
-        {
-          feltrinelliId: "00000000-0000-0000-0000-000000000001",
-          gameType: "books",
-          name: "IndovinaLibro"
-        },
-        {
-          feltrinelliId: "00000000-0000-0000-0000-000000000002",
-          gameType: "authors",
-          name: "Indovina l'Autore"
-        },
-        {
-          feltrinelliId: "00000000-0000-0000-0000-000000000003",
-          gameType: "years",
-          name: "Indovina l'Anno"
-        }
-      ];
-      
-      for (const mapping of defaultMappings) {
-        // Cerca il gioco interno corrispondente
-        const internalGame = internalGames.find(g => 
-          g.gameType === mapping.gameType || 
-          g.name.toLowerCase().includes(mapping.name.toLowerCase())
-        );
-        
-        if (internalGame) {
-          // Crea la mappatura
-          await db.insert(fltGames).values({
-            id: crypto.randomUUID(),
-            feltrinelliId: mapping.feltrinelliId,
-            internalId: internalGame.id,
-            name: internalGame.name,
-            description: internalGame.description,
-            isActive: internalGame.isActive
-          });
-          
-          console.log(`Mappatura creata: ${mapping.name} -> ID interno: ${internalGame.id}`);
-        } else {
-          console.log(`Nessun gioco interno trovato per: ${mapping.name}`);
-        }
-      }
+    // Verifica se Supabase è disponibile
+    if (!supabase || typeof supabase.from !== 'function') {
+      console.warn("Supabase non disponibile");
+      return;
     }
     
-    console.log("Inizializzazione completata");
+    // Imposta un timeout per le operazioni Supabase
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Timeout connecting to Supabase')), 3000);
+    });
+    
+    try {
+      // Verifica veloce della connessione a Supabase
+      const result = await Promise.race([
+        supabase.from('flt_games').select('count').limit(1),
+        timeoutPromise
+      ]);
+      
+      // Se arriviamo qui, significa che la query è stata completata prima del timeout
+      const { error } = result as { data: any, error: any };
+      
+      if (error) {
+        console.warn("[Supabase] Connection error:", error.message);
+        return;
+      }
+      
+      console.log("[Supabase] Connessione verificata, tabelle già inizializzate");
+      return; // Termina qui senza tentare di inizializzare le tabelle
+    } catch (timeoutError) {
+      console.warn("[Supabase] Connection timeout");
+      return;
+    }
   } catch (error) {
-    console.error("Errore durante l'inizializzazione delle tabelle Feltrinelli:", error);
+    console.error("Errore durante la verifica della connessione:", error);
   }
 }
 
-// Funzione per creare le tabelle Feltrinelli
-async function createFeltrinelliTables() {
+
+// Funzione per ottenere i premi disponibili
+export async function getAvailableRewards(req: Request, res: Response) {
   try {
-    // Usa Supabase per creare le tabelle
-    const createFltGames = await supabase
-      .from('flt_games')
-      .select('id')
-      .limit(1);
+    const { gameId, period = 'all_time' } = req.query;
     
-    if (createFltGames.error && createFltGames.error.message.includes('relation "flt_games" does not exist')) {
-      await supabase.rpc('create_flt_games_table');
-      console.log("Tabella flt_games creata");
-    } else {
-      console.log("Tabella flt_games già esistente");
+    if (!gameId) {
+      return res.status(400).json({ error: 'gameId query parameter is required' });
     }
-
-    // Tabella flt_game_sessions
-    const createFltGameSessions = await supabase
-      .from('flt_game_sessions')
-      .select('id')
-      .limit(1);
     
-    if (createFltGameSessions.error && createFltGameSessions.error.message.includes('relation "flt_game_sessions" does not exist')) {
-      await supabase.rpc('create_flt_game_sessions_table');
-      console.log("Tabella flt_game_sessions creata");
-    } else {
-      console.log("Tabella flt_game_sessions già esistente");
+    // Verifica che il periodo sia valido
+    if (!['all_time', 'monthly', 'weekly'].includes(period as string)) {
+      return res.status(400).json({ error: 'period must be one of: all_time, monthly, weekly' });
     }
-
-    // Tabella flt_user_profiles
-    const createFltUserProfiles = await supabase
-      .from('flt_user_profiles')
-      .select('id')
-      .limit(1);
     
-    if (createFltUserProfiles.error && createFltUserProfiles.error.message.includes('relation "flt_user_profiles" does not exist')) {
-      await supabase.rpc('create_flt_user_profiles_table');
-      console.log("Tabella flt_user_profiles creata");
-    } else {
-      console.log("Tabella flt_user_profiles già esistente");
-    }
-
-    // Tabella flt_answer_options
-    const createFltAnswerOptions = await supabase
-      .from('flt_answer_options')
-      .select('id')
-      .limit(1);
+    // Query per ottenere i premi disponibili dalla tabella flt_rewards
+    const { data, error } = await supabase
+      .from('flt_rewards')
+      .select('*')
+      .eq('game_id', gameId)
+      .eq('is_active', true) // Usando is_active invece di active
+      .order('created_at', { ascending: false });
     
-    if (createFltAnswerOptions.error && createFltAnswerOptions.error.message.includes('relation "flt_answer_options" does not exist')) {
-      await supabase.rpc('create_flt_answer_options_table');
-      console.log("Tabella flt_answer_options creata");
-    } else {
-      console.log("Tabella flt_answer_options già esistente");
+    if (error) {
+      console.error('Error fetching available rewards:', error);
+      return res.status(500).json({ error: 'Failed to fetch available rewards' });
     }
-
-    // Tabella flt_leaderboard
-    const createFltLeaderboard = await supabase
-      .from('flt_leaderboard')
-      .select('id')
-      .limit(1);
     
-    if (createFltLeaderboard.error && createFltLeaderboard.error.message.includes('relation "flt_leaderboard" does not exist')) {
-      await supabase.rpc('create_flt_leaderboard_table');
-      console.log("Tabella flt_leaderboard creata");
-    } else {
-      console.log("Tabella flt_leaderboard già esistente");
-    }
-
-    // Tabella flt_user_rewards
-    const createFltUserRewards = await supabase
-      .from('flt_user_rewards')
-      .select('id')
-      .limit(1);
+    // Formatta i risultati includendo i campi aggiuntivi
+    const rewards = data?.map(reward => ({
+      id: reward.id,
+      name: reward.name,
+      description: reward.description,
+      rank: reward.rank || 0,
+      points_required: reward.points_required || 0,
+      image_url: reward.image_url || null,
+      type: reward.type,
+      value: reward.value,
+      icon: reward.icon,
+      color: reward.color,
+      start_date: reward.start_date || null,
+      end_date: reward.end_date || null,
+      created_at: reward.created_at,
+      updated_at: reward.updated_at
+    })) || [];
     
-    if (createFltUserRewards.error && createFltUserRewards.error.message.includes('relation "flt_user_rewards" does not exist')) {
-      await supabase.rpc('create_flt_user_rewards_table');
-      console.log("Tabella flt_user_rewards creata");
-    } else {
-      console.log("Tabella flt_user_rewards già esistente");
-    }
-
-    console.log("Verifica delle tabelle Feltrinelli completata");
+    res.json(rewards);
   } catch (error) {
-    console.error("Errore durante la creazione delle tabelle Feltrinelli:", error);
-    throw error;
+    console.error('Error in getAvailableRewards:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// Funzione per ottenere i premi di un utente
+export async function getUserRewards(req: Request, res: Response) {
+  try {
+    const { userId } = req.params;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId parameter is required' });
+    }
+    
+    // Query per ottenere i premi dell'utente dalla tabella flt_user_rewards
+    const { data, error } = await supabase
+      .from('flt_user_rewards')
+      .select(`
+        *,
+        flt_rewards (*)
+      `)
+      .eq('user_id', userId);
+    
+    if (error) {
+      console.error('Error fetching user rewards:', error);
+      return res.status(500).json({ error: 'Failed to fetch user rewards' });
+    }
+    
+    // Formatta i risultati includendo i campi aggiuntivi
+    const rewards = data?.map(record => {
+      const reward = record.flt_rewards;
+      return {
+        id: reward.id,
+        name: reward.name,
+        description: reward.description,
+        type: reward.type,
+        value: reward.value,
+        icon: reward.icon,
+        color: reward.color,
+        image_url: reward.image_url || null,
+        start_date: reward.start_date || null,
+        end_date: reward.end_date || null,
+        is_active: reward.is_active,
+        game_id: record.game_id,
+        awarded_at: record.claimed_at || record.created_at,
+        created_at: reward.created_at,
+        updated_at: reward.updated_at
+      };
+    }) || [];
+    
+    res.json(rewards);
+  } catch (error) {
+    console.error('Error in getUserRewards:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 }

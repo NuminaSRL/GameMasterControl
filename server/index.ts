@@ -80,7 +80,7 @@ app.use((req, res, next) => {
     : 'Using PostgreSQL for database connection');
   
   // Se stiamo usando Supabase, inizializziamo le tabelle
-  if (storage instanceof SupabaseStorage) {
+ /* if (storage instanceof SupabaseStorage) {
     try {
       // Prima inizializziamo le tabelle
       await initSupabaseTables();
@@ -99,7 +99,7 @@ app.use((req, res, next) => {
     } catch (err) {
       console.error('[Supabase] Error testing connection:', err);
     }
-  }
+  } */
   
   const server = await registerRoutes(app);
 

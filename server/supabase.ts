@@ -1,84 +1,36 @@
-
 import { createClient } from '@supabase/supabase-js';
 
-// Verifica se le variabili d'ambiente sono disponibili
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Configurazione Supabase
+const supabaseUrl = process.env.SUPABASE_URL || 'https://hdguwqhxbqssdtqgilmy.supabase.co';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'tua-chiave-api-qui';
 
-console.log('[Supabase] Checking environment variables...');
-console.log('[Supabase] SUPABASE_URL available:', !!supabaseUrl);
-console.log('[Supabase] SUPABASE_SERVICE_ROLE_KEY available:', !!supabaseKey);
+console.log('[Supabase] Inizializzazione client...');
 
-// Crea un client mock se le credenziali non sono disponibili
-let supabaseClient;
+// Crea il client Supabase
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false
+  }
+});
 
-if (!supabaseUrl || !supabaseKey) {
-  console.warn('⚠️ Credenziali Supabase mancanti. Utilizzo client mock o fallback a database locale.');
-  
-  // Funzione helper per creare metodi concatenabili
-  const createChainableMock = () => {
-    const mock = {
-      select: () => mock,
-      insert: () => mock,
-      update: () => mock,
-      delete: () => mock,
-      eq: () => mock,
-      neq: () => mock,
-      gt: () => mock,
-      lt: () => mock,
-      gte: () => mock,
-      lte: () => mock,
-      like: () => mock,
-      ilike: () => mock,
-      is: () => mock,
-      in: () => mock,
-      contains: () => mock,
-      containedBy: () => mock,
-      range: () => mock,
-      overlaps: () => mock,
-      textSearch: () => mock,
-      filter: () => mock,
-      not: () => mock,
-      or: () => mock,
-      and: () => mock,
-      order: () => mock,
-      limit: () => mock,
-      offset: () => mock,
-      single: () => ({ data: null, error: { message: 'Supabase non configurato' } }),
-      maybeSingle: () => ({ data: null, error: { message: 'Supabase non configurato' } }),
-      then: (callback: any) => Promise.resolve({ data: null, error: { message: 'Supabase non configurato' } }).then(callback)
-    };
-    return mock;
-  };
-  
-  // Crea un client mock che non fa nulla ma non causa errori
-  supabaseClient = {
-    from: () => createChainableMock(),
-    rpc: () => ({ data: null, error: { message: 'Supabase non configurato' } }),
-    auth: {
-      signIn: () => Promise.resolve({ user: null, session: null, error: { message: 'Supabase non configurato' } }),
-      signOut: () => Promise.resolve({ error: { message: 'Supabase non configurato' } })
-    },
-    storage: {
-      from: () => ({
-        upload: () => Promise.resolve({ data: null, error: { message: 'Supabase non configurato' } }),
-        download: () => Promise.resolve({ data: null, error: { message: 'Supabase non configurato' } }),
-        remove: () => Promise.resolve({ data: null, error: { message: 'Supabase non configurato' } }),
-        list: () => Promise.resolve({ data: null, error: { message: 'Supabase non configurato' } })
-      })
+// Funzione per verificare la connessione
+export async function checkSupabaseConnection() {
+  try {
+    const { data, error } = await supabase.from('flt_games').select('count').limit(1);
+    
+    if (error) {
+      console.error('[Supabase] Errore di connessione:', error.message);
+      return false;
     }
-  };
-} else {
-  // Crea il client Supabase reale se le credenziali sono disponibili
-  supabaseClient = createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    }
-  });
+    
+    console.log('[Supabase] Connessione verificata con successo');
+    return true;
+  } catch (err) {
+    console.error('[Supabase] Eccezione durante la connessione:', err);
+    return false;
+  }
 }
-
-export const supabase = supabaseClient;
 
 // Funzione di utilità per formattare le date
 export function formatDates<T>(obj: T): T {
@@ -99,4 +51,14 @@ export function formatDates<T>(obj: T): T {
   }
   
   return result;
+}
+
+// Funzione di utilità per eseguire query con retry
+export async function safeSupabaseQuery<T>(queryFn: () => Promise<{data: T | null, error: any}>) {
+  try {
+    return await queryFn();
+  } catch (error) {
+    console.error("[Supabase] Errore nella query:", error);
+    return { data: null, error: { message: "Query fallita: " + (error instanceof Error ? error.message : String(error)) } };
+  }
 }

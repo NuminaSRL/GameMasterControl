@@ -28,10 +28,7 @@ console.log('[Storage] SUPABASE_SERVICE_ROLE_KEY exists:', !!process.env.SUPABAS
 
 // E poi modifica la classe StorageProviderManager per usare sempre Supabase se possibile
 export class StorageProviderManager {
-  private static provider: StorageProvider = 
-    (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) 
-      ? StorageProvider.SUPABASE 
-      : StorageProvider.DRIZZLE;
+  private static provider: StorageProvider = StorageProvider.SUPABASE;
 
   static setProvider(provider: StorageProvider) {
     this.provider = provider;
@@ -43,7 +40,7 @@ export class StorageProviderManager {
   }
 
   static useSupabase(): boolean {
-    return this.provider === StorageProvider.SUPABASE;
+    return true; // Sempre true perché usiamo solo Supabase
   }
 }
 
