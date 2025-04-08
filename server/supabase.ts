@@ -5,6 +5,10 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+console.log('[Supabase] Checking environment variables...');
+console.log('[Supabase] SUPABASE_URL available:', !!supabaseUrl);
+console.log('[Supabase] SUPABASE_SERVICE_ROLE_KEY available:', !!supabaseKey);
+
 // Crea un client mock se le credenziali non sono disponibili
 let supabaseClient;
 

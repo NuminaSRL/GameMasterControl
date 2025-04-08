@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm'; // Manteniamo questa importazione per compati
 
 
 
+
 // Definizione di tipi più precisi per le risposte di Supabase
 type SupabaseResponse<T> = {
   data: T | null;
@@ -20,8 +21,17 @@ export enum StorageProvider {
   SUPABASE = 'supabase'
 }
 
+// All'inizio del file, aggiungi questo codice
+console.log('[Storage] Checking environment for storage provider...');
+console.log('[Storage] SUPABASE_URL exists:', !!process.env.SUPABASE_URL);
+console.log('[Storage] SUPABASE_SERVICE_ROLE_KEY exists:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+// E poi modifica la classe StorageProviderManager per usare sempre Supabase se possibile
 export class StorageProviderManager {
-  private static provider: StorageProvider = StorageProvider.SUPABASE;
+  private static provider: StorageProvider = 
+    (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) 
+      ? StorageProvider.SUPABASE 
+      : StorageProvider.DRIZZLE;
 
   static setProvider(provider: StorageProvider) {
     this.provider = provider;
@@ -37,11 +47,11 @@ export class StorageProviderManager {
   }
 }
 
-// Forza l'utilizzo di Supabase in produzione
-if (process.env.NODE_ENV === 'production') {
+// Forza l'utilizzo di Supabase in produzione se le credenziali sono disponibili
+if (process.env.NODE_ENV === 'production' && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.log('[Storage] Forcing Supabase in production environment');
   StorageProviderManager.setProvider(StorageProvider.SUPABASE);
 }
-
 /**
  * Esegue una query SQL utilizzando Supabase.
  */
