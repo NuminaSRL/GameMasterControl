@@ -6,10 +6,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Copy source code (inclusi riferimenti alla cartella shared)
+# Copy source code
 COPY . .
 
-# Crea la cartella shared se non esiste
+# Create empty shared directory to avoid errors
 RUN mkdir -p ./shared
 
 # Build the application
@@ -23,6 +23,7 @@ WORKDIR /app
 # Copy build artifacts from build stage
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/shared ./shared
 
 # Environment variables
 ENV NODE_ENV=production
