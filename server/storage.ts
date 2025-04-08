@@ -5,7 +5,7 @@ import {
   rewards, type Reward, type InsertReward,
   gameBadges, type GameBadge, type InsertGameBadge,
   stats, type Stats
-} from "@shared/schema";
+} from "./shared/schema.js";
 import { db } from "./db";
 import { eq, and, or } from "drizzle-orm";
 import { SupabaseStorage } from "./supabase-storage";
