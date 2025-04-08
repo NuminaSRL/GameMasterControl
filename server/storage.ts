@@ -356,6 +356,11 @@ export class DatabaseStorage implements IStorage {
 // Abilitiamo Supabase se sono configurate le variabili d'ambiente necessarie
 // IMPORTANTE: Prima di attivare Supabase, assicurati di aver eseguito manualmente
 // il file migration-script.sql nell'SQL Editor della dashboard di Supabase
+
+// Controllo delle variabili d'ambiente per il debug
+console.log('[ENV Check] SUPABASE_URL:', process.env.SUPABASE_URL ? 'configurato' : 'mancante');
+console.log('[ENV Check] SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'configurato' : 'mancante');
+
 const useSupabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 // Variabile che determina quale storage usare
