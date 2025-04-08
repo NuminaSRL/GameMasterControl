@@ -1,11 +1,46 @@
 import { supabase } from './supabase';
 import { sql } from 'drizzle-orm'; // Manteniamo questa importazione per compatibilità futura
 
+
+
 // Definizione di tipi più precisi per le risposte di Supabase
 type SupabaseResponse<T> = {
   data: T | null;
   error: any;
 };
+
+// Scegli l'implementazione da utilizzare
+// Forziamo l'utilizzo di Supabase in produzione e quando sono disponibili le variabili d'ambiente
+// IMPORTANTE: Prima di attivare Supabase, assicurati di aver eseguito manualmente
+// il file migration-script.sql nell'SQL Editor della dashboard di Supabase
+
+// Esportiamo una funzione per determinare esplicitamente il provider
+export enum StorageProvider {
+  DRIZZLE = 'drizzle',
+  SUPABASE = 'supabase'
+}
+
+export class StorageProviderManager {
+  private static provider: StorageProvider = StorageProvider.SUPABASE;
+
+  static setProvider(provider: StorageProvider) {
+    this.provider = provider;
+    console.log(`[Storage] Provider impostato su: ${provider}`);
+  }
+
+  static getProvider(): StorageProvider {
+    return this.provider;
+  }
+
+  static useSupabase(): boolean {
+    return this.provider === StorageProvider.SUPABASE;
+  }
+}
+
+// Forza l'utilizzo di Supabase in produzione
+if (process.env.NODE_ENV === 'production') {
+  StorageProviderManager.setProvider(StorageProvider.SUPABASE);
+}
 
 /**
  * Esegue una query SQL utilizzando Supabase.
@@ -64,12 +99,12 @@ export async function selectFromTable<T>(
         try {
           // Utilizziamo una tipizzazione più esplicita e un approccio diverso
           type SupabaseQueryResult = { data: any; error: any };
-          
+
           // Eseguiamo la query in modo più diretto
           let queryPromise: Promise<SupabaseQueryResult>;
-          
+
           queryPromise = Promise.resolve(query.single()) as Promise<SupabaseQueryResult>;
-              
+
           const result = await queryPromise;
           return { 
             data: result.data as T, 
@@ -86,12 +121,12 @@ export async function selectFromTable<T>(
         try {
           // Utilizziamo una tipizzazione più esplicita e un approccio diverso
           type SupabaseQueryResult = { data: any; error: any };
-          
+
           // Eseguiamo la query in modo più diretto
           let queryPromise: Promise<SupabaseQueryResult>;
-          
+
           queryPromise = Promise.resolve(query) as Promise<SupabaseQueryResult>;
-              
+
           const result = await queryPromise;
           return { 
             data: result.data as T, 
@@ -131,16 +166,16 @@ export async function insertIntoTable<T>(
     try {
       // Utilizziamo una tipizzazione più esplicita e un approccio diverso
       type SupabaseQueryResult = { data: any; error: any };
-      
+
       // Eseguiamo la query in modo più diretto
       let queryPromise: Promise<SupabaseQueryResult>;
-      
+
       try {
         queryPromise = Promise.resolve(supabase
           .from(tableName)
           .insert(data)
           .select(returning)) as Promise<SupabaseQueryResult>;
-          
+
         const result = await queryPromise;
         return { 
           data: result.data as T, 
@@ -179,21 +214,21 @@ export async function updateTable<T>(
   const supabaseQuery = async () => {
     try {
       let query = supabase.from(tableName).update(data);
-      
+
       // Applica condizioni WHERE
       Object.entries(where).forEach(([key, value]) => {
         query = query.eq(key, value);
       });
-      
+
       // Utilizziamo una tipizzazione più esplicita e un approccio diverso
       type SupabaseQueryResult = { data: any; error: any };
-      
+
       // Eseguiamo la query in modo più diretto
       let queryPromise: Promise<SupabaseQueryResult>;
-      
+
       try {
         queryPromise = Promise.resolve(query.select(returning)) as Promise<SupabaseQueryResult>;
-          
+
         const result = await queryPromise;
         return { 
           data: result.data as T, 
@@ -206,8 +241,8 @@ export async function updateTable<T>(
           error: queryError 
         };
       }
-      
-   
+
+
     } catch (error) {
       console.error(`Errore nell'aggiornamento Supabase su ${tableName}:`, error);
       return { 
@@ -230,21 +265,21 @@ export async function deleteFromTable(
   const supabaseQuery = async () => {
     try {
       let query = supabase.from(tableName).delete();
-      
+
       // Applica condizioni WHERE
       Object.entries(where).forEach(([key, value]) => {
         query = query.eq(key, value);
       });
-      
+
       // Utilizziamo una tipizzazione più esplicita e un approccio diverso
       type SupabaseQueryResult = { data: any; error: any };
-      
+
       // Eseguiamo la query in modo più diretto
       let queryPromise: Promise<SupabaseQueryResult>;
-      
+
       try {
         queryPromise = Promise.resolve(query) as Promise<SupabaseQueryResult>;
-          
+
         const result = await queryPromise;
         return { 
           data: null,  // Aggiungiamo data: null per conformarci al tipo SupabaseResponse

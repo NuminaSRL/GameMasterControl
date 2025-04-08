@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 // Verifica se le variabili d'ambiente sono disponibili
