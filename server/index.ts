@@ -112,7 +112,10 @@ app.use((req, res, next) => {
       await initSupabaseTables();
       
       // Poi verifichiamo se la tabella users esiste
-      const { data, error } = await supabase.from('users').select('*').limit(1);
+      const queryResult = supabase.from('users').select('*').limit(1);
+      const { data, error } = await new Promise<{data: any, error: any}>((resolve) => {
+        queryResult.then((res: any) => resolve(res));
+      });
       
       if (error) {
         console.error('[Supabase] Connection error:', error.message);
