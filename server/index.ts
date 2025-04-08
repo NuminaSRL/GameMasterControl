@@ -44,7 +44,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use((req, res, next) => {
   // Imposta gli header CORS
   const allowedOrigins = [
-    'https://your-vercel-app-url.vercel.app', // Sostituire con il tuo dominio Vercel
+    'https://gamemastercontrol.vercel.app/', // Sostituire con il tuo dominio Vercel
     'http://localhost:3000',                 // Per sviluppo locale
     'http://localhost:5000'                  // Per sviluppo monolitico
   ];
