@@ -1,0 +1,25 @@
+{
+    "include": ["./**/*"],
+    "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
+    "compilerOptions": {
+      "target": "ES2022",
+      "module": "ESNext",
+      "moduleResolution": "node",
+      "esModuleInterop": true,
+      "allowSyntheticDefaultImports": true,
+      "strict": true,
+      "forceConsistentCasingInFileNames": true,
+      "noFallthroughCasesInSwitch": true,
+      "isolatedModules": true,
+      "skipLibCheck": true,
+      "outDir": "dist",
+      "lib": ["ES2022"],
+      "baseUrl": "./",
+      "paths": {
+        "@/*": ["./*"],
+        "@shared/*": ["../shared/*"]
+      },
+      "types": ["node"]
+    }
+    
+  }

@@ -1,4 +1,4 @@
-# Feltrinelli Game Engine API Documentation (Aggiornata)
+# Feltrinelli Game Engine API Documentation
 
 ## Overview
 Questa documentazione descrive le API del Game Engine utilizzate dall'applicazione Feltrinelli. L'applicazione funziona come un motore di gioco centralizzato (master) che fornisce API per client (a partire da Feltrinelli).
@@ -115,7 +115,7 @@ Ottiene i dettagli di un gioco specifico e le sue impostazioni.
   "flt_game_settings": {
     "id": "7f8d9a1b-2c3d-4e5f-6g7h-8i9j0k1l2m3n",
     "game_id": "00000000-0000-0000-0000-000000000001",
-    "timer_duration": 30,
+    "time_duration": 30,
     "question_count": 5,
     "difficulty": 1,
     "active": true,
@@ -136,7 +136,95 @@ Ottiene le impostazioni specifiche di un gioco.
 {
   "id": "7f8d9a1b-2c3d-4e5f-6g7h-8i9j0k1l2m3n",
   "game_id": "00000000-0000-0000-0000-000000000001",
-  "timer_duration": 30,
+  "time_duration": 30,
+  "question_count": 5,
+  "difficulty": 1,
+  "active": true,
+  "created_at": "2023-01-01T00:00:00Z",
+  "updated_at": "2023-01-01T00:00:00Z"
+}
+```
+
+## Giochi
+
+### GET /api/feltrinelli/games
+Ottiene l'elenco di tutti i giochi disponibili.
+
+**Parametri Query:**
+- `active` (opzionale): Se impostato a `true`, restituisce solo i giochi attivi nel periodo corrente
+
+**Risposta di successo:**
+```json
+[
+  {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "feltrinelli_id": "00000000-0000-0000-0000-000000000001",
+    "internal_id": 1,
+    "name": "IndovinaLibro",
+    "description": "Indovina il libro dall'estratto dell'abstract",
+    "is_active": true,
+    "start_date": "2023-01-01T00:00:00Z",
+    "end_date": "2023-12-31T23:59:59Z",
+    "created_at": "2023-01-01T00:00:00Z",
+    "updated_at": "2023-01-01T00:00:00Z"
+  },
+  {
+    "id": "00000000-0000-0000-0000-000000000002",
+    "feltrinelli_id": "00000000-0000-0000-0000-000000000002",
+    "internal_id": 2,
+    "name": "Indovina l'Autore",
+    "description": "Indovina l'autore dei libri mostrati",
+    "is_active": true,
+    "start_date": null,
+    "end_date": null,
+    "created_at": "2023-01-01T00:00:00Z",
+    "updated_at": "2023-01-01T00:00:00Z"
+  }
+]
+```
+
+### GET /api/feltrinelli/games/:id
+Ottiene i dettagli di un gioco specifico e le sue impostazioni.
+
+**Parametri Path:**
+- `id`: ID del gioco in formato UUID
+
+**Risposta di successo:**
+```json
+{
+  "id": "00000000-0000-0000-0000-000000000001",
+  "name": "IndovinaLibro",
+  "description": "Indovina il libro dall'estratto dell'abstract",
+  "is_active": true,
+  "start_date": "2023-01-01T00:00:00Z",
+  "end_date": "2023-12-31T23:59:59Z",
+  "created_at": "2023-01-01T00:00:00Z",
+  "updated_at": "2023-01-01T00:00:00Z",
+  "flt_game_settings": {
+    "id": "7f8d9a1b-2c3d-4e5f-6g7h-8i9j0k1l2m3n",
+    "game_id": "00000000-0000-0000-0000-000000000001",
+    "time_duration": 30,
+    "question_count": 5,
+    "difficulty": 1,
+    "active": true,
+    "created_at": "2023-01-01T00:00:00Z",
+    "updated_at": "2023-01-01T00:00:00Z"
+  }
+}
+```
+
+### GET /api/feltrinelli/game-settings/:gameId
+Ottiene le impostazioni specifiche di un gioco.
+
+**Parametri Path:**
+- `gameId`: ID del gioco in formato UUID
+
+**Risposta di successo:**
+```json
+{
+  "id": "7f8d9a1b-2c3d-4e5f-6g7h-8i9j0k1l2m3n",
+  "game_id": "00000000-0000-0000-0000-000000000001",
+  "time_duration": 30,
   "question_count": 5,
   "difficulty": 1,
   "active": true,
@@ -498,7 +586,7 @@ Invia un punteggio alla classifica.
 ## Premi
 
 ### GET /api/feltrinelli/rewards
-Ottiene i premi disponibili per un tipo di gioco specifico.
+Ottiene i premi disponibili per un tipo di gioco e un periodo specifici.
 
 **Parametri Query:**
 - `gameType`: Tipo di gioco (`books`, `authors`, `years`)
@@ -506,40 +594,35 @@ Ottiene i premi disponibili per un tipo di gioco specifico.
 
 **Risposta di successo:**
 ```json
-[
-  {
-    "id": "reward-uuid-1",
-    "name": "Tazza Feltrinelli",
-    "description": "Una tazza esclusiva Feltrinelli",
-    "type": "merchandise",
-    "value": "tazza",
-    "icon": "cup",
-    "color": "#33FFA1",
-    "available": 5,
-    "image_url": "https://www.lafeltrinelli.it/images/rewards/tazza.png",
-    "is_active": true,
-    "start_date": "2023-01-01T00:00:00Z",
-    "end_date": "2025-12-31T23:59:59Z",
-    "created_at": "2023-01-01T00:00:00Z",
-    "updated_at": "2023-01-01T00:00:00Z",
-    "rank": 1
-  },
-  {
-    "id": "reward-uuid-2",
-    "name": "Buono Sconto 10%",
-    "description": "Buono sconto del 10% su tutti i libri",
-    "type": "discount",
-    "value": "10",
-    "icon": "percent",
-    "color": "#33A1FF",
-    "available": 50,
-    "image_url": "https://www.lafeltrinelli.it/images/rewards/buonosconto.png",
-    "is_active": true,
-    "created_at": "2023-01-01T00:00:00Z",
-    "updated_at": "2023-01-01T00:00:00Z",
-    "rank": 2
-  }
-]
+{
+  "success": true,
+  "rewards": [
+    {
+      "id": "reward-uuid-1",
+      "name": "Tazza Feltrinelli",
+      "description": "Una tazza esclusiva Feltrinelli",
+      "image_url": "url-immagine-tazza",
+      "points_required": 100,
+      "rank": 1
+    },
+    {
+      "id": "reward-uuid-2",
+      "name": "Buono Sconto 10%",
+      "description": "Buono sconto del 10% su tutti i libri",
+      "image_url": "url-immagine-buono",
+      "points_required": 50,
+      "rank": 2
+    },
+    {
+      "id": "reward-uuid-3",
+      "name": "Segnalibro Feltrinelli",
+      "description": "Segnalibro esclusivo Feltrinelli",
+      "image_url": "url-immagine-segnalibro",
+      "points_required": 25,
+      "rank": 3
+    }
+  ]
+}
 ```
 
 ### GET /api/feltrinelli/rewards/user/:userId
@@ -550,85 +633,32 @@ Ottiene i premi ottenuti da un utente specifico.
 
 **Risposta di successo:**
 ```json
-[
-  {
-    "id": "user-reward-uuid-1",
-    "user_id": "user-uuid",
-    "reward_id": "reward-uuid-1",
-    "game_id": "00000000-0000-0000-0000-000000000001",
-    "period": "all_time",
-    "rank": 1,
-    "claimed_at": "2023-01-01T12:00:00Z",
-    "reward": {
-      "id": "reward-uuid-1",
-      "name": "Tazza Feltrinelli",
-      "description": "Una tazza esclusiva Feltrinelli",
-      "image_url": "https://www.lafeltrinelli.it/images/rewards/tazza.png",
-      "type": "merchandise",
-      "value": "tazza",
-      "icon": "cup",
-      "color": "#33FFA1"
+{
+  "success": true,
+  "rewards": [
+    {
+      "id": "user-reward-uuid-1",
+      "user_id": "user-uuid",
+      "reward_id": "reward-uuid-1",
+      "game_id": "00000000-0000-0000-0000-000000000001",
+      "period": "all_time",
+      "rank": 1,
+      "claimed_at": "2023-01-01T12:00:00Z",
+      "rewards": {
+        "name": "Tazza Feltrinelli",
+        "description": "Una tazza esclusiva Feltrinelli",
+        "image_url": "url-immagine-tazza"
+      }
     }
-  }
-]
-```
-
-## Game Badges
-
-### GET /api/feltrinelli/game-badges/:gameId
-Ottiene i badge associati a un gioco specifico.
-
-**Parametri Path:**
-- `gameId`: ID del gioco in formato UUID
-
-**Risposta di successo:**
-```json
-[
-  {
-    "id": "badge-uuid-1",
-    "game_id": "00000000-0000-0000-0000-000000000001",
-    "name": "Lettore Esperto",
-    "description": "Ottenuto 100 punti nel quiz libri",
-    "icon": "book",
-    "color": "#FF5733",
-    "created_at": "2023-01-01T00:00:00Z"
-  },
-  {
-    "id": "badge-uuid-2",
-    "game_id": "00000000-0000-0000-0000-000000000001",
-    "name": "Risposte Rapide",
-    "description": "Risposto a 10 domande in meno di 5 secondi ciascuna",
-    "icon": "clock",
-    "color": "#33A1FF",
-    "created_at": "2023-01-01T00:00:00Z"
-  }
-]
+  ]
+}
 ```
 
 ## Esempi di utilizzo
 
 ### Esempio: Flusso di gioco completo per Quiz Libri
 
-1. **Verificare che il gioco sia attivo:**
-```javascript
-const gamesResponse = await fetch('https://feltrinelli-api.railway.app/api/feltrinelli/games?active=true');
-const games = await gamesResponse.json();
-const booksGame = games.find(game => game.id === '00000000-0000-0000-0000-000000000001');
-
-if (!booksGame) {
-  console.error('Il gioco IndovinaLibro non è attualmente attivo');
-  return;
-}
-
-// Ottieni le impostazioni del gioco
-const settingsResponse = await fetch(`https://feltrinelli-api.railway.app/api/feltrinelli/game-settings/${booksGame.id}`);
-const settings = await settingsResponse.json();
-const questionCount = settings.question_count;
-const timerDuration = settings.timer_duration;
-const difficulty = settings.difficulty;
-```
-
-2. **Inizializzare una sessione di gioco:**
+1. **Inizializzare una sessione di gioco:**
 ```javascript
 const response = await fetch('https://feltrinelli-api.railway.app/api/feltrinelli/session', {
   method: 'POST',
@@ -642,13 +672,13 @@ const session = await response.json();
 const sessionId = session.session_id;
 ```
 
-3. **Ottenere una domanda:**
+2. **Ottenere una domanda:**
 ```javascript
-const questionResponse = await fetch(`https://feltrinelli-api.railway.app/api/feltrinelli/bookquiz/question?difficulty=${difficulty}`);
+const questionResponse = await fetch('https://feltrinelli-api.railway.app/api/feltrinelli/bookquiz/question?difficulty=1');
 const question = await questionResponse.json();
 ```
 
-4. **Inviare una risposta:**
+3. **Inviare una risposta:**
 ```javascript
 const answerResponse = await fetch('https://feltrinelli-api.railway.app/api/feltrinelli/bookquiz/answer', {
   method: 'POST',
@@ -663,7 +693,7 @@ const answerResponse = await fetch('https://feltrinelli-api.railway.app/api/felt
 const result = await answerResponse.json();
 ```
 
-5. **Inviare il punteggio finale alla classifica:**
+4. **Inviare il punteggio finale alla classifica:**
 ```javascript
 const leaderboardResponse = await fetch('https://feltrinelli-api.railway.app/api/feltrinelli/score', {
   method: 'POST',
@@ -679,22 +709,14 @@ const leaderboardResponse = await fetch('https://feltrinelli-api.railway.app/api
 const leaderboardResult = await leaderboardResponse.json();
 ```
 
-6. **Verificare i premi ottenuti:**
-```javascript
-const rewardsResponse = await fetch('https://feltrinelli-api.railway.app/api/feltrinelli/rewards/user/00000000-0000-0000-0000-000000000099');
-const rewards = await rewardsResponse.json();
-```
-
 ## Note Importanti
 
 - Gli ID dei giochi sono UUID predefiniti:
   - Quiz Libri: `00000000-0000-0000-0000-000000000001`
   - Quiz Autori: `00000000-0000-0000-0000-000000000002`
   - Quiz Anni: `00000000-0000-0000-0000-000000000003`
-- I giochi possono essere attivati/disattivati sia manualmente (tramite il campo `is_active`) che automaticamente in base alle date di inizio/fine (campi `start_date` e `end_date`)
-- La difficoltà del gioco può essere configurata tramite il campo `difficulty` nelle impostazioni del gioco
 - I punteggi vengono calcolati automaticamente dal backend in base al numero di risposte corrette e al tempo impiegato
 - Le classifiche sono disponibili per diversi periodi: generale (`all_time`), mensile (`monthly`) e settimanale (`weekly`)
-- I premi sono associati alle posizioni in classifica e possono avere un periodo di validità definito tramite i campi `start_date` e `end_date`
+- I premi sono associati alle posizioni in classifica (1°, 2°, 3° posto)
 - Tutti gli endpoint richiedono che l'ID utente sia in formato UUID
 - Le immagini per libri, profili utente e premi sono fornite come URL completi

@@ -1,11 +1,11 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
 import { supabase } from "./supabase";
 import { storage } from "./storage"; 
 import { SupabaseStorage, initSupabaseTables } from "./supabase-storage";
 import fs from "fs";
 import path from "path";
+import cors from "cors";
 
 // Carica variabili d'ambiente dal file .env se esiste (per ambiente locale)
 try {
@@ -40,35 +40,35 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Configurazione CORS per consentire richieste cross-origin dal frontend
-app.use((req, res, next) => {
-  // Imposta gli header CORS
-  const allowedOrigins = [
-    'https://gamemastercontrol.vercel.app/', // Sostituire con il tuo dominio Vercel
-    'http://localhost:3000',                 // Per sviluppo locale
-    'http://localhost:5000'                  // Per sviluppo monolitico
-  ];
-  
-  const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
-    // Consenti a tutti in produzione - da restringere in base ai tuoi requisiti
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  }
-  
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  
-  // Gestisci le richieste OPTIONS preflight
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
-  next();
+// Utilizziamo il middleware cors invece della configurazione manuale
+app.use(cors({
+  origin: function(origin, callback) {
+    const allowedOrigins = [
+      'https://gamemastercontrol.vercel.app', // Rimosso lo slash finale
+      'http://localhost:3000',
+      'http://localhost:5000'
+    ];
+    
+    // Consenti richieste senza origin (come mobile app o Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
+}));
+
+// Endpoint di health check per Railway
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Middleware per il logging delle richieste API
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -92,7 +92,7 @@ app.use((req, res, next) => {
         logLine = logLine.slice(0, 79) + "…";
       }
 
-      log(logLine);
+      console.log(`[API] ${logLine}`);
     }
   });
 
@@ -131,27 +131,16 @@ app.use((req, res, next) => {
     const message = err.message || "Internal Server Error";
 
     res.status(status).json({ message });
-    throw err;
+    console.error('[Error]', err);
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
-
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = 5000;
+  // ALWAYS serve the app on port 5000 or the PORT environment variable
+  const port = process.env.PORT || 5000;
   server.listen({
     port,
     host: "0.0.0.0",
     reusePort: true,
   }, () => {
-    log(`serving on port ${port}`);
+    console.log(`[Server] API server running on port ${port}`);
   });
 })();
