@@ -18,7 +18,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cors({
   origin: function(origin, callback) {
     const allowedOrigins = [
-      'gamemastercontrol-dev-numinaai-numina-eda53c60.vercel.app', // Rimosso lo slash finale
+      'https://gamemastercontrol-dev-numinaai-numina-eda53c60.vercel.app', // Aggiunto https://
       'http://localhost:3000',
       'http://localhost:5000'
     ];
@@ -29,11 +29,12 @@ app.use(cors({
     if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
       callback(null, true);
     } else {
+      console.error(`Origin ${origin} not allowed by CORS`);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
 }));
 

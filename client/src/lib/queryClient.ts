@@ -16,6 +16,8 @@ export async function apiRequest<T = any>(
   // Costruisci l'URL API completo usando buildApiUrl
   const apiUrl = path.startsWith('/api') ? buildApiUrl(path.substring(4)) : path;
   
+  console.log(`Making API request to: ${apiUrl}`); // Aggiungi log per debug
+  
   const res = await fetch(apiUrl, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
