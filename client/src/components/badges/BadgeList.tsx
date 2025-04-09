@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Badge } from "@shared/schema";
+import { Badge } from '../../shared/schema';
 import { Button } from "@/components/ui/button";
 
 export default function BadgeList() {

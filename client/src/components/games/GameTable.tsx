@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Game } from "@shared/schema";
+import { Game } from '../../shared/schema';
 import GameRow from "./GameRow";
 
 interface GameTableProps {
@@ -46,7 +46,7 @@ export default function GameTable({ games, onEdit, onToggle }: GameTableProps) {
           {paginatedGames.map((game) => (
             <GameRow 
               key={game.id} 
-              game={game} 
+              game={game as any} // Utilizziamo un type assertion temporaneo
               onEdit={() => onEdit(game)}
               onToggle={() => onToggle(game.id)}
             />

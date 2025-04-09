@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Reward } from "@shared/schema";
+import { Reward } from '../../shared/schema';
 import { Button } from "@/components/ui/button";
 
 export default function RewardList() {

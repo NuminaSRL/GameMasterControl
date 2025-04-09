@@ -3,7 +3,7 @@ import StatsCard from "@/components/dashboard/StatsCard";
 import GameTable from "@/components/games/GameTable";
 import BadgeList from "@/components/badges/BadgeList";
 import RewardList from "@/components/rewards/RewardList";
-import { Stats, Game } from "@shared/schema";
+import { Stats, Game } from '../shared/schema';
 import { useState } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";

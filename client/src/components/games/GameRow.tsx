@@ -1,4 +1,4 @@
-import { Game } from "@shared/schema";
+import { Game } from '../../shared/schema';
 
 interface GameRowProps {
   game: Game;

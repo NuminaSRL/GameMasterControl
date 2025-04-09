@@ -3,14 +3,13 @@
 
 // Ottieni l'URL base per le chiamate API in base all'ambiente
 export function getApiBaseUrl(): string {
-  // In produzione, usa l'URL di Railway configurato in vercel.json
-  if (import.meta.env.PROD) {
-    // In produzione, le API calls verranno proxate tramite vercel.json
+  // In produzione, usa sempre /api come base URL
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
     return '/api';
   }
   
-  // Durante lo sviluppo usa l'URL locale o variabile d'ambiente
-  return import.meta.env.VITE_API_URL || '/api';
+  // Durante lo sviluppo, usa un valore predefinito
+  return 'http://localhost:5000/api';
 }
 
 // Utilizza questa funzione per costruire URL API completi

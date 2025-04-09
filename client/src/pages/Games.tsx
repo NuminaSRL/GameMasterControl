@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import GameTable from "@/components/games/GameTable";
 import EditGameModal from "@/components/games/EditGameModal";
-import { Game } from "@shared/schema";
+import { Stats, Game } from '../shared/schema';
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
