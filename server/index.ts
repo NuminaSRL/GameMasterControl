@@ -195,26 +195,46 @@ app.get('/api/feltrinelli/rewards', async (req, res) => {
   try {
     console.log('[API] Direct handler for /api/feltrinelli/rewards');
     
-    // Estrai il gameId dalla query o usa un valore predefinito
+    // Estrai il gameType dalla query o usa un valore predefinito
     const gameType = req.query.gameType as string;
-    let gameId = '00000000-0000-0000-0000-000000000001'; // Default: Quiz Libri
+    const gameId = req.query.game_id as string;
     
-    // Mappa gameType a gameId se necessario
-    if (gameType === 'authors') {
-      gameId = '00000000-0000-0000-0000-000000000002';
-    } else if (gameType === 'years') {
-      gameId = '00000000-0000-0000-0000-000000000003';
-    }
+    console.log(`[API] Request params - gameType: ${gameType}, gameId: ${gameId}`);
     
-    console.log(`[API] Fetching rewards for gameId: ${gameId}`);
-    
-    // Usa Supabase per ottenere i rewards
-    const { data, error } = await supabase
+    let query = supabase
       .from('flt_rewards')
       .select('*')
-      .eq('game_id', gameId)
       .eq('is_active', true)
       .order('created_at', { ascending: false });
+    
+    // Se è specificato un gameId specifico, usa quello
+    if (gameId) {
+      console.log(`[API] Filtering by specific gameId: ${gameId}`);
+      query = query.eq('game_id', gameId);
+    }
+    // Altrimenti, se è specificato un gameType, mappa al gameId corrispondente
+    else if (gameType) {
+      let mappedGameId = '00000000-0000-0000-0000-000000000001'; // Default: Quiz Libri
+      
+      // Mappa gameType a gameId
+      if (gameType === 'books' || gameType === 'libri') {
+        mappedGameId = '00000000-0000-0000-0000-000000000001';
+      } else if (gameType === 'authors' || gameType === 'autori') {
+        mappedGameId = '00000000-0000-0000-0000-000000000002';
+      } else if (gameType === 'years' || gameType === 'anni') {
+        mappedGameId = '00000000-0000-0000-0000-000000000003';
+      }
+      
+      console.log(`[API] Mapped gameType ${gameType} to gameId: ${mappedGameId}`);
+      query = query.eq('game_id', mappedGameId);
+    }
+    // Se non è specificato né gameId né gameType, restituisci tutti i premi
+    else {
+      console.log('[API] No gameId or gameType specified, returning all rewards');
+    }
+    
+    // Esegui la query
+    const { data, error } = await query;
     
     if (error) {
       console.error('[API] Supabase query error:', error);
@@ -233,7 +253,8 @@ app.get('/api/feltrinelli/rewards', async (req, res) => {
       value: reward.value || '',
       icon: reward.icon || 'gift',
       color: reward.color || '#33FFA1',
-      available: reward.available || 10
+      available: reward.available || 10,
+      game_id: reward.game_id
     })) || [];
     
     console.log(`[API] Returning ${rewards.length} rewards directly`);
