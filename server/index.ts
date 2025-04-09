@@ -81,36 +81,39 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   // Intercetta le richieste che potrebbero essere dirette a api.feltrinelli.com
   try {
+    // Salva il fetch originale
     const originalFetch = global.fetch;
     
     // Definiamo una nuova funzione fetch che intercetta le chiamate
     const newFetch = async function(url: string | URL | FetchRequest, init?: RequestInit) {
       const urlString = typeof url === 'string' ? url : url.toString();
       
-      // Intercetta QUALSIASI chiamata a api.feltrinelli.com o che contenga /api/rewards/available
-      if (urlString.includes('api.feltrinelli.com') || urlString.includes('/api/rewards/available')) {
-        console.log(`[API Redirect] Intercepting request to ${urlString}`);
+      console.log(`[Fetch Interceptor] Intercepting fetch call to: ${urlString}`);
+      
+      // Intercetta QUALSIASI chiamata a api.feltrinelli.com o che contenga rewards/available
+      if (urlString.includes('api.feltrinelli.com') || 
+          urlString.includes('/api/rewards/available') || 
+          urlString.includes('/api/feltrinelli/rewards')) {
+        
+        console.log(`[Fetch Interceptor] Redirecting request from ${urlString} to Supabase`);
         
         // Estrai il gameId dalla query string o dal percorso
         let gameId: string | null = null;
         
         try {
-          const urlObj = new URL(urlString);
-          gameId = urlObj.searchParams.get('game_id');
-          
-          // Se non abbiamo un gameId, proviamo a cercarlo nel percorso
-          if (!gameId && urlString.includes('game_id=')) {
+          // Prova a estrarre il gameId dall'URL
+          if (urlString.includes('game_id=')) {
             const match = urlString.match(/game_id=([^&]+)/);
             if (match) gameId = match[1];
           }
           
-          // Se ancora non abbiamo un gameId, usiamo un valore predefinito
+          // Se non abbiamo un gameId, usiamo un valore predefinito
           if (!gameId) {
-            console.log('[API Redirect] No gameId found, using default');
+            console.log('[Fetch Interceptor] No gameId found, using default');
             gameId = '00000000-0000-0000-0000-000000000001'; // ID predefinito
           }
           
-          console.log(`[API Redirect] Using gameId: ${gameId}`);
+          console.log(`[Fetch Interceptor] Using gameId: ${gameId}`);
           
           // Usa Supabase per ottenere i rewards
           const { data, error } = await supabase
@@ -121,7 +124,7 @@ app.use((req, res, next) => {
             .order('created_at', { ascending: false });
           
           if (error) {
-            console.error('[API Redirect] Supabase query error:', error);
+            console.error('[Fetch Interceptor] Supabase query error:', error);
             // Fallback: restituisci un array vuoto
             return new FetchResponse(JSON.stringify({ success: true, rewards: [] }), {
               status: 200,
@@ -139,7 +142,7 @@ app.use((req, res, next) => {
             rank: reward.rank
           })) || [];
           
-          console.log(`[API Redirect] Returning ${rewards.length} rewards`);
+          console.log(`[Fetch Interceptor] Returning ${rewards.length} rewards`);
           
           // Crea una risposta simulata
           return new FetchResponse(JSON.stringify({ success: true, rewards }), {
@@ -147,7 +150,7 @@ app.use((req, res, next) => {
             headers: { 'Content-Type': 'application/json' }
           });
         } catch (error) {
-          console.error('[API Redirect] Error processing request:', error);
+          console.error('[Fetch Interceptor] Error processing request:', error);
           // Fallback: restituisci un array vuoto
           return new FetchResponse(JSON.stringify({ success: true, rewards: [] }), {
             status: 200,
@@ -158,6 +161,7 @@ app.use((req, res, next) => {
       
       // Per tutte le altre richieste, usa il fetch originale
       try {
+        console.log(`[Fetch Interceptor] Passing through to original fetch: ${urlString}`);
         // Converti l'URL nel formato corretto per originalFetch
         if (url instanceof FetchRequest) {
           return originalFetch(url.url, init);
@@ -165,7 +169,7 @@ app.use((req, res, next) => {
           return originalFetch(url, init);
         }
       } catch (error) {
-        console.error('[API Redirect] Error in original fetch:', error);
+        console.error('[Fetch Interceptor] Error in original fetch:', error);
         throw error;
       }
     };
@@ -181,8 +185,64 @@ app.use((req, res, next) => {
       global.fetch = originalFetch;
     });
   } catch (error) {
-    console.error('[API Redirect] Error setting up fetch interceptor:', error);
+    console.error('[Fetch Interceptor] Error setting up fetch interceptor:', error);
     next();
+  }
+});
+
+// Aggiungi anche un endpoint diretto per /api/feltrinelli/rewards
+app.get('/api/feltrinelli/rewards', async (req, res) => {
+  try {
+    console.log('[API] Direct handler for /api/feltrinelli/rewards');
+    
+    // Estrai il gameId dalla query o usa un valore predefinito
+    const gameType = req.query.gameType as string;
+    let gameId = '00000000-0000-0000-0000-000000000001'; // Default: Quiz Libri
+    
+    // Mappa gameType a gameId se necessario
+    if (gameType === 'authors') {
+      gameId = '00000000-0000-0000-0000-000000000002';
+    } else if (gameType === 'years') {
+      gameId = '00000000-0000-0000-0000-000000000003';
+    }
+    
+    console.log(`[API] Fetching rewards for gameId: ${gameId}`);
+    
+    // Usa Supabase per ottenere i rewards
+    const { data, error } = await supabase
+      .from('flt_rewards')
+      .select('*')
+      .eq('game_id', gameId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('[API] Supabase query error:', error);
+      return res.status(500).json({ message: `Error fetching rewards: ${error.message}` });
+    }
+    
+    // Formatta i dati nel formato atteso
+    const rewards = data?.map(reward => ({
+      id: reward.id,
+      name: reward.name,
+      description: reward.description,
+      image_url: reward.image_url,
+      points_required: reward.points_required,
+      rank: reward.rank,
+      type: reward.type || 'merchandise',
+      value: reward.value || '',
+      icon: reward.icon || 'gift',
+      color: reward.color || '#33FFA1',
+      available: reward.available || 10
+    })) || [];
+    
+    console.log(`[API] Returning ${rewards.length} rewards directly`);
+    
+    // Restituisci i rewards
+    return res.status(200).json(rewards);
+  } catch (error) {
+    console.error('[API] Error handling /api/feltrinelli/rewards:', error);
+    return res.status(500).json({ message: `Error fetching rewards: ${error}` });
   }
 });
 
