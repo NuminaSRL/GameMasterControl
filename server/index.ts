@@ -1,4 +1,5 @@
-import express, { type Request, Response, NextFunction } from "express";
+// Rimuovi l'import duplicato di fetch
+import express, { type Request, Response as ExpressResponse, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { supabase } from "./supabase";
 import { storage } from "./storage"; 
@@ -6,6 +7,8 @@ import { SupabaseStorage, initSupabaseTables } from "./supabase-storage";
 import fs from "fs";
 import path from "path";
 import cors from "cors";
+// Importa correttamente node-fetch con i tipi necessari
+import nodeFetch, { Response as FetchResponse, Request as FetchRequest } from 'node-fetch';
 
 // Import e configura variabili d'ambiente prima di tutto
 import './check-env.js';
@@ -74,6 +77,85 @@ app.use((req, res, next) => {
   next();
 });
 
+// Aggiungi il middleware di intercettazione PRIMA di registerRoutes
+app.use((req, res, next) => {
+  // Intercetta le richieste che potrebbero essere dirette a api.feltrinelli.com
+  try {
+    const originalFetch = global.fetch;
+    
+    // Definiamo una nuova funzione fetch che intercetta le chiamate
+    const newFetch = async function(url: string | URL | FetchRequest, init?: RequestInit) {
+      const urlString = typeof url === 'string' ? url : url.toString();
+      
+      // Se la richiesta è diretta a api.feltrinelli.com, reindirizzala a Supabase
+      if (urlString.includes('api.feltrinelli.com') || urlString.includes('/api/rewards/available')) {
+        console.log(`[API Redirect] Redirecting request from ${urlString} to Supabase`);
+        
+        // Estrai il gameId e il period dalla query string
+        const urlObj = new URL(urlString);
+        const gameId = urlObj.searchParams.get('game_id');
+        const period = urlObj.searchParams.get('period') || 'all_time';
+        
+        if (urlString.includes('/api/rewards/available') && gameId) {
+          try {
+            // Usa Supabase per ottenere i rewards
+            const { data, error } = await supabase
+              .from('flt_rewards')
+              .select('*')
+              .eq('game_id', gameId)
+              .eq('is_active', true)
+              .order('created_at', { ascending: false });
+            
+            if (error) throw error;
+            
+            // Formatta i dati nel formato atteso
+            const rewards = data.map(reward => ({
+              id: reward.id,
+              name: reward.name,
+              description: reward.description,
+              image_url: reward.image_url,
+              points_required: reward.points_required,
+              rank: reward.rank
+            }));
+            
+            // Crea una risposta simulata
+            const responseBody = JSON.stringify({ success: true, rewards });
+            return new FetchResponse(responseBody, {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          } catch (error) {
+            console.error('[API Redirect] Error fetching rewards from Supabase:', error);
+            throw error;
+          }
+        }
+      }
+      
+      // Per tutte le altre richieste, usa il fetch originale
+      // Converti l'URL nel formato corretto per originalFetch
+      if (url instanceof FetchRequest) {
+        return originalFetch(url.url, init);
+      } else {
+        return originalFetch(url, init);
+      }
+    };
+    
+    // Sostituisci la funzione fetch globale
+    global.fetch = newFetch as typeof global.fetch;
+    
+    // Continua con la richiesta
+    next();
+    
+    // Ripristina il fetch originale dopo che la richiesta è stata gestita
+    res.on('finish', () => {
+      global.fetch = originalFetch;
+    });
+  } catch (error) {
+    console.error('[API Redirect] Error setting up fetch interceptor:', error);
+    next();
+  }
+});
+
 (async () => {
   // Verifica quale storage stiamo utilizzando
   console.log('[Database]', storage instanceof SupabaseStorage 
@@ -81,7 +163,7 @@ app.use((req, res, next) => {
     : 'Using PostgreSQL for database connection');
   
   // Se stiamo usando Supabase, inizializziamo le tabelle
- /* if (storage instanceof SupabaseStorage) {
+  if (storage instanceof SupabaseStorage) {
     try {
       // Prima inizializziamo le tabelle
       await initSupabaseTables();
@@ -100,11 +182,11 @@ app.use((req, res, next) => {
     } catch (err) {
       console.error('[Supabase] Error testing connection:', err);
     }
-  } */
+  }
   
   const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: any, _req: Request, res: ExpressResponse, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
