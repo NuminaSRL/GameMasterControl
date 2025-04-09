@@ -18,7 +18,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cors({
   origin: function(origin, callback) {
     const allowedOrigins = [
-      'https://gamemastercontrol.vercel.app', // Rimosso lo slash finale
+      'gamemastercontrol-dev-numinaai-numina-eda53c60.vercel.app', // Rimosso lo slash finale
       'http://localhost:3000',
       'http://localhost:5000'
     ];
