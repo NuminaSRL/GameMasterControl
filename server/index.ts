@@ -213,7 +213,7 @@ app.get('/api/feltrinelli/rewards', async (req, res) => {
       query = query.eq('game_id', gameId);
     }
     // Altrimenti, se è specificato un gameType, mappa al gameId corrispondente
-    else if (gameType) {
+    else if (gameType && gameType !== 'all') {
       let mappedGameId = '00000000-0000-0000-0000-000000000001'; // Default: Quiz Libri
       
       // Mappa gameType a gameId
@@ -228,9 +228,9 @@ app.get('/api/feltrinelli/rewards', async (req, res) => {
       console.log(`[API] Mapped gameType ${gameType} to gameId: ${mappedGameId}`);
       query = query.eq('game_id', mappedGameId);
     }
-    // Se non è specificato né gameId né gameType, restituisci tutti i premi
+    // Se gameType è 'all' o non è specificato né gameId né gameType, restituisci tutti i premi
     else {
-      console.log('[API] No gameId or gameType specified, returning all rewards');
+      console.log('[API] Returning all rewards (gameType is "all" or not specified)');
     }
     
     // Esegui la query
