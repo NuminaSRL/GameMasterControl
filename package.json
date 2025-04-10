@@ -1,0 +1,17 @@
+{
+  "scripts": {
+    "build": "cd server && tsc",
+    "start": "node server/dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "esbuild": "^0.25.2",
+    "tsup": "^8.4.0"
+  },
+  "dependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.1",
+    "cors": "^2.8.5",
+    "express": "^5.1.0"
+  }
+}

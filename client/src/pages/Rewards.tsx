@@ -94,7 +94,7 @@ const rewardFormSchema = z.object({
 });
 
 export default function RewardsPage() {
-  const [gameType, setGameType] = useState<"books" | "authors" | "years">("books");
+  const [gameType, setGameType] = useState<"books" | "authors" | "years" | "all">("all");
   const [period, setPeriod] = useState<"all_time" | "monthly" | "weekly">("all_time");
   const [searchQuery, setSearchQuery] = useState("");
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -149,28 +149,58 @@ export default function RewardsPage() {
   // Handle creation/edit of reward
   const onSubmit = async (data: z.infer<typeof rewardFormSchema>) => {
     try {
+      // Create a simpler object with just the essential fields
+      const formattedData = {
+        name: data.name,
+        description: data.description,
+        type: data.type,
+        value: data.value,
+        rank: Number(data.rank),
+        imageUrl: data.imageUrl,
+        icon: data.icon,
+        color: data.color,
+        available: Number(data.available),
+        gameType: data.gameType,
+        pointsRequired: data.rank <= 3 ? 100 * (4 - data.rank) : 50, // Automatic points calculation
+        // Remove the problematic field entirely for now
+      };
+      
+      console.log('Submitting reward data:', formattedData);
+      
       if (currentReward) {
         // Edit existing reward
-        await fetch(`/api/rewards/${currentReward.id}`, {
+        const response = await fetch(`/api/rewards/${currentReward.id}`, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(data),
+          body: JSON.stringify(formattedData),
         });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `Errore ${response.status}: ${response.statusText}`);
+        }
+        
         toast({
           title: "Premio aggiornato",
           description: "Il premio è stato aggiornato con successo",
         });
       } else {
         // Create new reward
-        await fetch("/api/rewards", {
+        const response = await fetch("/api/rewards", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(data),
+          body: JSON.stringify(formattedData),
         });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || `Errore ${response.status}: ${response.statusText}`);
+        }
+        
         toast({
           title: "Premio creato",
           description: "Il nuovo premio è stato creato con successo",
@@ -185,9 +215,10 @@ export default function RewardsPage() {
       // Refresh rewards list
       queryClient.invalidateQueries({ queryKey: ['/api/rewards'] });
     } catch (error) {
+      console.error('Error submitting reward:', error);
       toast({
         title: "Errore",
-        description: "Si è verificato un errore durante il salvataggio del premio",
+        description: error instanceof Error ? error.message : "Si è verificato un errore durante il salvataggio del premio",
         variant: "destructive",
       });
     }
@@ -414,12 +445,13 @@ export default function RewardsPage() {
                   <Label htmlFor="gameType">Tipo di Gioco</Label>
                   <Select
                     value={gameType}
-                    onValueChange={(value) => setGameType(value as "books" | "authors" | "years")}
+                    onValueChange={(value) => setGameType(value as "books" | "authors" | "years" | "all")}
                   >
                     <SelectTrigger id="gameType">
                       <SelectValue placeholder="Seleziona un tipo di gioco" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="all">Tutti i giochi</SelectItem>
                       <SelectItem value="books">Quiz Libri</SelectItem>
                       <SelectItem value="authors">Quiz Autori</SelectItem>
                       <SelectItem value="years">Quiz Anni</SelectItem>

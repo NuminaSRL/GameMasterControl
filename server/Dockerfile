@@ -12,8 +12,14 @@ COPY . .
 # Create empty shared directory if not exists
 RUN mkdir -p ./shared
 
+# Verifichiamo il contenuto del file validators.ts prima della build
+RUN cat validators.ts
+
 # Build the application
 RUN npm run build
+
+# Verifichiamo che il file validators.js sia stato generato correttamente
+RUN cat dist/validators.js
 
 # Set environment variables
 ENV NODE_ENV=production
@@ -22,5 +28,5 @@ ENV PORT=5000
 # Expose port
 EXPOSE 5000
 
-# Start the server directly with node
-CMD ["node", "./dist/index.js"]
+# Start the server with the correct entry point
+CMD ["node", "--experimental-specifier-resolution=node", "./dist/index.js"]

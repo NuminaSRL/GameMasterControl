@@ -1,13 +1,15 @@
 import {
-  users, type User, type InsertUser,
-  games, type Game, type InsertGame,
-  badges, type Badge, type InsertBadge,
-  rewards, type Reward, type InsertReward,
-  gameBadges, type GameBadge, type InsertGameBadge,
-  stats, type Stats
-} from "./shared/schema.js";
+  // Remove unused constants but keep the type imports
+  type User, type InsertUser,
+  type Game, type InsertGame,
+  type Badge, type InsertBadge,
+  type Reward, type InsertReward,
+  type GameBadge, type InsertGameBadge,
+  type Stats
+} from "./shared/schema";  // Path is already correct
 import { db } from "./db";
-import { eq, and, or } from "drizzle-orm";
+// Remove Drizzle ORM imports since we're not using them anymore
+// import { eq, and, or } from "drizzle-orm";
 import { SupabaseStorage } from "./supabase-storage";
 
 
@@ -49,71 +51,81 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: number): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user || undefined;
+    // Replace Drizzle ORM query with raw SQL
+    const result = await db.execute(
+      `SELECT * FROM users WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+    return result.length > 0 ? result[0] : undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user || undefined;
+    const result = await db.execute(
+      `SELECT * FROM users WHERE username = $1 LIMIT 1`,
+      [username]
+    );
+    return result.length > 0 ? result[0] : undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(insertUser)
-      .returning();
-    return user;
+    const keys = Object.keys(insertUser);
+    const values = Object.values(insertUser);
+    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+    const columns = keys.join(', ');
+    
+    const result = await db.execute(
+      `INSERT INTO users (${columns}) VALUES (${placeholders}) RETURNING *`,
+      values
+    );
+    return result[0];
   }
 
   async getAllGames(): Promise<Game[]> {
-    return await db.select().from(games);
+    return await db.execute(`SELECT * FROM games`);
   }
 
   async getGame(id: number): Promise<Game | undefined> {
-    const [game] = await db.select().from(games).where(eq(games.id, id));
-    return game || undefined;
+    const result = await db.execute(
+      `SELECT * FROM games WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+    return result.length > 0 ? result[0] : undefined;
   }
 
   async createGame(game: InsertGame): Promise<Game> {
-    const [newGame] = await db
-      .insert(games)
-      .values(game)
-      .returning();
+    const keys = Object.keys(game);
+    const values = Object.values(game);
+    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+    const columns = keys.join(', ');
+    
+    const result = await db.execute(
+      `INSERT INTO games (${columns}) VALUES (${placeholders}) RETURNING *`,
+      values
+    );
     
     // Update stats
-    const [statsData] = await db.select().from(stats).limit(1);
+    const statsData = await this.getStats();
     
-    if (statsData) {
-      await db
-        .update(stats)
-        .set({
-          totalGames: statsData.totalGames + 1,
-          activeGames: game.isActive ? statsData.activeGames + 1 : statsData.activeGames,
-          updatedAt: new Date()
-        })
-        .where(eq(stats.id, statsData.id));
-    } else {
-      // Initialize stats if they don't exist
-      await db
-        .insert(stats)
-        .values({
-          totalGames: 1,
-          activeGames: game.isActive ? 1 : 0,
-          activeUsers: 0,
-          awardedBadges: 0
-        });
-    }
+    await db.execute(
+      `UPDATE stats SET 
+        total_games = $1, 
+        active_games = $2, 
+        updated_at = $3 
+      WHERE id = $4`,
+      [
+        statsData.totalGames + 1,
+        game.isActive ? statsData.activeGames + 1 : statsData.activeGames,
+        new Date(),
+        statsData.id
+      ]
+    );
     
-    return newGame;
+    return result[0];
   }
 
   async updateGame(id: number, gameUpdate: Partial<InsertGame>): Promise<Game | undefined> {
     // Get the existing game
-    const [existingGame] = await db
-      .select()
-      .from(games)
-      .where(eq(games.id, id));
+    const existingGame = await this.getGame(id);
     
     if (!existingGame) {
       return undefined;
@@ -123,37 +135,40 @@ export class DatabaseStorage implements IStorage {
     const wasActive = existingGame.isActive;
     const willBeActive = gameUpdate.isActive !== undefined ? gameUpdate.isActive : wasActive;
     
+    // Build SET clause for SQL
+    const keys = Object.keys(gameUpdate);
+    const values = Object.values(gameUpdate);
+    const setClauses = keys.map((key, i) => `${key} = $${i + 1}`).join(', ');
+    
     // Update game
-    const [updatedGame] = await db
-      .update(games)
-      .set(gameUpdate)
-      .where(eq(games.id, id))
-      .returning();
+    const result = await db.execute(
+      `UPDATE games SET ${setClauses} WHERE id = $${keys.length + 1} RETURNING *`,
+      [...values, id]
+    );
     
     // Update stats if active status changed
     if (wasActive !== willBeActive) {
-      const [statsData] = await db.select().from(stats).limit(1);
+      const statsData = await this.getStats();
       
-      if (statsData) {
-        await db
-          .update(stats)
-          .set({
-            activeGames: willBeActive ? statsData.activeGames + 1 : statsData.activeGames - 1,
-            updatedAt: new Date()
-          })
-          .where(eq(stats.id, statsData.id));
-      }
+      await db.execute(
+        `UPDATE stats SET 
+          active_games = $1, 
+          updated_at = $2 
+        WHERE id = $3`,
+        [
+          willBeActive ? statsData.activeGames + 1 : statsData.activeGames - 1,
+          new Date(),
+          statsData.id
+        ]
+      );
     }
     
-    return updatedGame;
+    return result[0];
   }
 
   async toggleGameStatus(id: number): Promise<Game | undefined> {
     // Get the existing game
-    const [existingGame] = await db
-      .select()
-      .from(games)
-      .where(eq(games.id, id));
+    const existingGame = await this.getGame(id);
     
     if (!existingGame) {
       return undefined;
@@ -163,193 +178,206 @@ export class DatabaseStorage implements IStorage {
     const newStatus = !existingGame.isActive;
     
     // Update game
-    const [updatedGame] = await db
-      .update(games)
-      .set({ isActive: newStatus })
-      .where(eq(games.id, id))
-      .returning();
+    const result = await db.execute(
+      `UPDATE games SET is_active = $1 WHERE id = $2 RETURNING *`,
+      [newStatus, id]
+    );
     
     // Update stats
-    const [statsData] = await db.select().from(stats).limit(1);
+    const statsData = await this.getStats();
     
-    if (statsData) {
-      await db
-        .update(stats)
-        .set({
-          activeGames: newStatus ? statsData.activeGames + 1 : statsData.activeGames - 1,
-          updatedAt: new Date()
-        })
-        .where(eq(stats.id, statsData.id));
-    }
+    await db.execute(
+      `UPDATE stats SET 
+        active_games = $1, 
+        updated_at = $2 
+      WHERE id = $3`,
+      [
+        newStatus ? statsData.activeGames + 1 : statsData.activeGames - 1,
+        new Date(),
+        statsData.id
+      ]
+    );
     
-    return updatedGame;
+    return result[0];
   }
 
   async getAllBadges(): Promise<Badge[]> {
-    return await db.select().from(badges);
+    return await db.execute(`SELECT * FROM badges`);
   }
 
   async getBadge(id: number): Promise<Badge | undefined> {
-    const [badge] = await db.select().from(badges).where(eq(badges.id, id));
-    return badge || undefined;
+    const result = await db.execute(
+      `SELECT * FROM badges WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+    return result.length > 0 ? result[0] : undefined;
   }
 
   async createBadge(badge: InsertBadge): Promise<Badge> {
-    const [newBadge] = await db
-      .insert(badges)
-      .values(badge)
-      .returning();
-    return newBadge;
+    const keys = Object.keys(badge);
+    const values = Object.values(badge);
+    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+    const columns = keys.join(', ');
+    
+    const result = await db.execute(
+      `INSERT INTO badges (${columns}) VALUES (${placeholders}) RETURNING *`,
+      values
+    );
+    return result[0];
   }
 
   async getAllRewards(): Promise<Reward[]> {
-    return await db.select().from(rewards);
+    return await db.execute(`SELECT * FROM rewards`);
   }
 
   async getReward(id: number): Promise<Reward | undefined> {
-    const [reward] = await db.select().from(rewards).where(eq(rewards.id, id));
-    return reward || undefined;
+    const result = await db.execute(
+      `SELECT * FROM rewards WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+    return result.length > 0 ? result[0] : undefined;
   }
 
   async createReward(reward: InsertReward): Promise<Reward> {
-    const [newReward] = await db
-      .insert(rewards)
-      .values(reward)
-      .returning();
-    return newReward;
+    const keys = Object.keys(reward);
+    const values = Object.values(reward);
+    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+    const columns = keys.join(', ');
+    
+    const result = await db.execute(
+      `INSERT INTO rewards (${columns}) VALUES (${placeholders}) RETURNING *`,
+      values
+    );
+    return result[0];
   }
 
   async updateReward(id: number, rewardUpdate: Partial<InsertReward>): Promise<Reward | undefined> {
     // Get existing reward
-    const [existingReward] = await db
-      .select()
-      .from(rewards)
-      .where(eq(rewards.id, id));
+    const existingReward = await this.getReward(id);
     
     if (!existingReward) {
       return undefined;
     }
     
-    // Update reward
-    const [updatedReward] = await db
-      .update(rewards)
-      .set(rewardUpdate)
-      .where(eq(rewards.id, id))
-      .returning();
+    // Build SET clause for SQL
+    const keys = Object.keys(rewardUpdate);
+    const values = Object.values(rewardUpdate);
+    const setClauses = keys.map((key, i) => `${key} = $${i + 1}`).join(', ');
     
-    return updatedReward;
+    // Update reward
+    const result = await db.execute(
+      `UPDATE rewards SET ${setClauses} WHERE id = $${keys.length + 1} RETURNING *`,
+      [...values, id]
+    );
+    
+    return result[0];
   }
 
   async deleteReward(id: number): Promise<void> {
-    await db
-      .delete(rewards)
-      .where(eq(rewards.id, id));
+    await db.execute(
+      `DELETE FROM rewards WHERE id = $1`,
+      [id]
+    );
   }
 
   async getGameBadges(gameId: number): Promise<Badge[]> {
-    const badgeRelations = await db
-      .select()
-      .from(gameBadges)
-      .where(eq(gameBadges.gameId, gameId));
+    const badgeRelations = await db.execute(
+      `SELECT * FROM game_badges WHERE game_id = $1`,
+      [gameId]
+    );
     
     if (badgeRelations.length === 0) {
       return [];
     }
     
-    const badgeIds = badgeRelations.map(rel => rel.badgeId);
+    // Aggiornato per utilizzare snake_case come nel database
+    const badgeIds = badgeRelations.map((rel: { badge_id: number }) => rel.badge_id);
+    const placeholders = badgeIds.map((_: number, i: number) => `$${i + 1}`).join(', ');
     
-    const badgeList = await db
-      .select()
-      .from(badges)
-      .where(
-        badgeIds.map(id => eq(badges.id, id)).reduce((acc, curr) => acc || curr)
-      );
+    const badgeList = await db.execute(
+      `SELECT * FROM badges WHERE id IN (${placeholders})`,
+      badgeIds
+    );
     
     return badgeList;
   }
 
   async assignBadgeToGame(gameBadge: InsertGameBadge): Promise<GameBadge> {
     // Check if already exists
-    const [existing] = await db
-      .select()
-      .from(gameBadges)
-      .where(
-        and(
-          eq(gameBadges.gameId, gameBadge.gameId),
-          eq(gameBadges.badgeId, gameBadge.badgeId)
-        )
-      );
+    const existing = await db.execute(
+      `SELECT * FROM game_badges WHERE game_id = $1 AND badge_id = $2 LIMIT 1`,
+      [gameBadge.gameId, gameBadge.badgeId]
+    );
     
-    if (existing) {
+    if (existing.length > 0) {
       throw new Error("Badge already assigned to this game");
     }
     
-    const [newGameBadge] = await db
-      .insert(gameBadges)
-      .values(gameBadge)
-      .returning();
+    const result = await db.execute(
+      `INSERT INTO game_badges (game_id, badge_id) VALUES ($1, $2) RETURNING *`,
+      [gameBadge.gameId, gameBadge.badgeId]
+    );
     
-    return newGameBadge;
+    return result[0];
   }
 
   async removeBadgeFromGame(gameId: number, badgeId: number): Promise<void> {
-    await db
-      .delete(gameBadges)
-      .where(
-        and(
-          eq(gameBadges.gameId, gameId),
-          eq(gameBadges.badgeId, badgeId)
-        )
-      );
+    await db.execute(
+      `DELETE FROM game_badges WHERE game_id = $1 AND badge_id = $2`,
+      [gameId, badgeId]
+    );
   }
 
   async getStats(): Promise<Stats> {
-    const [statsData] = await db.select().from(stats).limit(1);
+    const result = await db.execute(
+      `SELECT * FROM stats LIMIT 1`
+    );
     
-    if (!statsData) {
+    if (result.length === 0) {
       // Initialize stats if they don't exist
-      const [newStats] = await db
-        .insert(stats)
-        .values({
-          totalGames: 0,
-          activeGames: 0,
-          activeUsers: 0,
-          awardedBadges: 0
-        })
-        .returning();
+      const newStats = await db.execute(
+        `INSERT INTO stats (total_games, active_games, active_users, awarded_badges) 
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [0, 0, 0, 0]
+      );
       
-      return newStats;
+      return newStats[0];
     }
     
-    return statsData;
+    return result[0];
   }
 
   async updateStats(statsUpdate: Partial<Stats>): Promise<Stats> {
-    const [statsData] = await db.select().from(stats).limit(1);
+    const statsData = await this.getStats();
     
     if (!statsData) {
       // Initialize stats if they don't exist with the provided updates
-      const [newStats] = await db
-        .insert(stats)
-        .values({
-          totalGames: statsUpdate.totalGames || 0,
-          activeGames: statsUpdate.activeGames || 0,
-          activeUsers: statsUpdate.activeUsers || 0,
-          awardedBadges: statsUpdate.awardedBadges || 0,
-        })
-        .returning();
+      const newStats = await db.execute(
+        `INSERT INTO stats (total_games, active_games, active_users, awarded_badges) 
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [
+          statsUpdate.totalGames || 0,
+          statsUpdate.activeGames || 0,
+          statsUpdate.activeUsers || 0,
+          statsUpdate.awardedBadges || 0
+        ]
+      );
       
-      return newStats;
+      return newStats[0];
     }
     
-    // Update existing stats
-    const [updatedStats] = await db
-      .update(stats)
-      .set({ ...statsUpdate, updatedAt: new Date() })
-      .where(eq(stats.id, statsData.id))
-      .returning();
+    // Build SET clause for SQL
+    const keys = Object.keys(statsUpdate);
+    const values = Object.values(statsUpdate);
+    const setClauses = keys.map((key, i) => `${key} = $${i + 1}`).join(', ');
     
-    return updatedStats;
+    // Update existing stats
+    const result = await db.execute(
+      `UPDATE stats SET ${setClauses}, updated_at = $${keys.length + 1} WHERE id = $${keys.length + 2} RETURNING *`,
+      [...values, new Date(), statsData.id]
+    );
+    
+    return result[0];
   }
 }
 

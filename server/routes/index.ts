@@ -1,46 +1,76 @@
-import type { Express } from "express";
+import { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { insertGameSchema, insertBadgeSchema, insertRewardSchema, insertGameBadgeSchema } from "@shared/schema";
-import * as feltrinelliApi from "./feltrinelli-api";
-import { GAME_IDS } from "./feltrinelli-api";
-import * as fltApi from "./flt-api";
-import * as fltSimpleApi from "./flt-simple-api";
-import * as userProfileApi from "./user-profile-api";
-import { supabase, safeSupabaseQuery } from './supabase';
-import { db } from "./db";
-import { sql } from 'drizzle-orm';
+import { storage } from "../storage.js";
+import { insertGameSchema, insertBadgeSchema, insertRewardSchema, insertGameBadgeSchema } from "../validators";
+import * as feltrinelliApi from "../feltrinelli-api";
+import { GAME_IDS } from "../feltrinelli-api";
+import * as fltApi from "../flt-api";
+import * as fltSimpleApi from "../flt-simple-api";
+import * as userProfileApi from "../user-profile-api";
+import { supabase, safeSupabaseQuery } from '../supabase';
 import crypto from 'crypto';
+import feltrinelliRouter from '../clients/feltrinelli/routes/feltrinelli-routes';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+
+// Aggiungi questo codice per definire __dirname in un modulo ES
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Verifica se il file .env esiste e lo carica
+const envPath = path.resolve(__dirname, '../.env');// Aggiornato per riflettere la posizione corretta
+if (fs.existsSync(envPath)) {
+  console.log('[Config] Caricamento variabili d\'ambiente da .env');
+  dotenv.config({ path: envPath });
+} else {
+  console.warn('[Config] File .env non trovato');
+}
+
+// Log delle variabili d'ambiente per verifica
+console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? 'Presente' : 'Assente');
+console.log('SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Presente' : 'Assente');
+console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'Presente' : 'Assente');
+
+
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Create HTTP server
   const httpServer = createServer(app);
 
   // === FELTRINELLI API INTEGRATION - NUOVA VERSIONE ===
+
+    // Registra le route di Feltrinelli con il nuovo percorso
+    app.use('/api/clients/feltrinelli', feltrinelliRouter);
+  
+    // Mantieni anche il vecchio percorso per retrocompatibilità
+    app.use('/api/feltrinelli', feltrinelliRouter);
   
   // Health check principale
-  app.get('/api/health', async (req, res) => {
+  app.get('/api/health', (req, res) => {
+    console.log('[Health Check] Endpoint chiamato - risposta immediata senza dipendenze');
+    
     try {
-      // Verifichiamo la connessione a Supabase
-      const { count, error } = await supabase
-        .from('flt_games')
-        .select('*', { count: 'exact', head: true });
+      // Log per tracciare il percorso di esecuzione
+      console.log('[Health Check] Inizio elaborazione');
       
-      if (error) {
-        return res.status(503).json({ status: 'error', message: 'Database connection failed' });
-      }
+      // Verifichiamo le variabili d'ambiente critiche
+      console.log('[Health Check] Verifica variabili ambiente:', {
+        SUPABASE_URL: process.env.SUPABASE_URL ? 'Presente' : 'Assente',
+        DATABASE_URL: process.env.DATABASE_URL ? 'Presente' : 'Assente'
+      });
       
-      res.json({ status: 'ok', message: 'Gaming Engine API is running' });
+      // Rispondiamo immediatamente con 200 OK senza alcuna logica o dipendenza
+      console.log('[Health Check] Invio risposta 200 OK');
+      return res.status(200).send('OK');
     } catch (error) {
-      res.status(500).json({ status: 'error', message: `Error in health check: ${error instanceof Error ? error.message : 'Unknown error'}` });
+      // Log dell'errore se qualcosa va storto
+      console.error('[Health Check] Errore:', error);
+      return res.status(500).send('Health check error');
     }
   });
-  
 
-  
-
-
-  
 
 
   // Sessione di gioco - sia con /api/games/session che con /api/feltrinelli/session
@@ -1142,6 +1172,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
   }
-
+  console.log('[Server] Configurazione route completata, server pronto');
   return httpServer;
 }

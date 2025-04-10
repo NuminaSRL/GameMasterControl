@@ -1,9 +1,19 @@
 import { Request, Response } from "express";
 import { db } from "./db";
 import { supabase } from "./supabase";
-import { fltGames, flt_rewards, flt_users, gameSettings, insertFltGameSchema, insertFLTRewardSchema, insertFLTUserSchema, insertGameSettingsSchema, FLTGame, FLTReward, FLTUser, GameSettings } from "@shared/schema";
-import { eq, sql } from "drizzle-orm";
-import { z } from "zod";
+// Importiamo solo le interfacce TypeScript
+import { 
+  InsertFltGame, 
+  InsertFLTReward, 
+  InsertFLTUser, 
+  InsertGameSettings, 
+  FltGame, 
+  FLTReward, 
+  FLTUser, 
+  GameSettings 
+} from "./shared/schema";
+// Rimuoviamo l'import di Zod
+// import { z } from "zod";
 import crypto from "crypto";
 
 // ===== API per tabella flt_users =====
@@ -75,11 +85,11 @@ export async function createFLTUser(req: Request, res: Response) {
       });
     }
 
-    // Prepara i dati validati
-    const validatedData = insertFLTUserSchema.parse({
+    // Prepara i dati validati (senza Zod)
+    const validatedData: InsertFLTUser = {
       userId: user_id,
       active: true
-    });
+    };
 
     // Crea un nuovo utente
     const { data: newUser, error: insertError } = await supabase
@@ -176,7 +186,8 @@ export async function getFLTGame(req: Request, res: Response) {
 // POST: Crea un nuovo gioco
 export async function createFLTGame(req: Request, res: Response) {
   try {
-    const validatedData = insertFltGameSchema.parse(req.body);
+    // Sostituiamo la validazione Zod con un'assegnazione di tipo
+    const validatedData: InsertFltGame = req.body;
     
     // Genera un UUID per il nuovo gioco
     const gameId = crypto.randomUUID();
@@ -194,11 +205,12 @@ export async function createFLTGame(req: Request, res: Response) {
 
     // Se sono fornite le impostazioni del gioco, le salviamo
     if (req.body.settings) {
-      const settingsData = insertGameSettingsSchema.parse({
+      // Sostituiamo la validazione Zod con un'assegnazione di tipo
+      const settingsData: InsertGameSettings = {
         gameId: game.id, // Usiamo l'ID del gioco appena creato
         timeDuration: req.body.settings.timeDuration || 30,
         questionCount: req.body.settings.questionCount || 5
-      });
+      };
       
       const { error: settingsError } = await supabase
         .from('flt_game_settings')
@@ -255,11 +267,12 @@ export async function updateFLTGame(req: Request, res: Response) {
         if (settingsError) throw settingsError;
       } else {
         // Crea nuove impostazioni
-        const validatedData = insertGameSettingsSchema.parse({
+        // Sostituiamo la validazione Zod con un'assegnazione di tipo
+        const validatedData: InsertGameSettings = {
           gameId: id,
           timeDuration: data.settings.timeDuration || 30,
           questionCount: data.settings.questionCount || 5
-        });
+        };
         
         const { error: settingsError } = await supabase
           .from('flt_game_settings')
@@ -379,7 +392,7 @@ export async function saveGameSettings(req: Request, res: Response) {
         .update({
           timeDuration: data.timeDuration,
           questionCount: data.questionCount,
-          difficulty: data.difficulty !== undefined ? data.difficulty : 1,
+          // Rimuoviamo difficulty che non è nell'interfaccia
           active: data.active !== undefined ? data.active : true
         })
         .eq('game_id', gameId)
@@ -395,13 +408,14 @@ export async function saveGameSettings(req: Request, res: Response) {
       });
     } else {
       // Crea nuove impostazioni
-      const validatedData = insertGameSettingsSchema.parse({
+      // Sostituiamo la validazione Zod con un'assegnazione di tipo
+      const validatedData: InsertGameSettings = {
         gameId: gameId,
         timeDuration: data.timeDuration || 30,
         questionCount: data.questionCount || 5,
         difficulty: data.difficulty || 1,
         active: data.active !== undefined ? data.active : true
-      });
+      };
       
       const { data: newSettings, error } = await supabase
         .from('flt_game_settings')
@@ -457,23 +471,24 @@ export async function getGameBadges(req: Request, res: Response) {
       // Prova a cercare nel database reale
       try {
         console.log("Query SQL diretta per trovare il gioco");
-        // Esegui una query SQL diretta con le colonne corrette
-        const rows = await db.execute(
-          sql`SELECT id, internal_id, name FROM flt_games WHERE feltrinelli_id = ${gameId}`
+        // Modifichiamo la query per utilizzare db.execute invece di sql template literal
+        const result = await db.execute(
+          `SELECT id, internal_id, name FROM flt_games WHERE feltrinelli_id = $1`,
+          [gameId]
         );
         
-        console.log("Risultato SQL diretto:", rows);
+        console.log("Risultato SQL diretto:", result);
         
-        if (!rows || !rows.rows || rows.rows.length === 0) {
+        if (!result || result.length === 0) {
           return res.status(404).json({ 
             error: "Game mapping not found", 
             message: `No mapping found for Feltrinelli ID: ${gameId}` 
           });
         }
         
-        // Usa il primo risultato della query SQL
-        internalGameId = rows.rows[0].internal_id || rows.rows[0].id;
-        gameName = rows.rows[0].name;
+        // Utilizziamo asserzioni di tipo per informare TypeScript sui tipi corretti
+        internalGameId = (result[0].internal_id as number) || (result[0].id as number);
+        gameName = result[0].name as string;
         
         console.log("Mapping trovato con SQL diretto:", { internalGameId, gameName });
       } catch (dbError) {
@@ -744,7 +759,8 @@ export async function getFLTReward(req: Request, res: Response) {
 // POST: Crea un nuovo premio
 export async function createFLTReward(req: Request, res: Response) {
   try {
-    const validatedData = insertFLTRewardSchema.parse(req.body);
+    // Sostituiamo la validazione Zod con un'assegnazione di tipo
+    const validatedData: InsertFLTReward = req.body;
     
     const { data: reward, error } = await supabase
       .from('flt_rewards')

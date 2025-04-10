@@ -4,6 +4,14 @@
 import { Request, Response } from 'express';
 import { supabase } from './supabase';
 
+// Aggiungi questa interfaccia all'inizio del file, dopo le importazioni
+interface PostgrestError {
+  message: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+}
+
 /**
  * Ottiene il profilo di un utente con i suoi premi e badge
  */
@@ -30,14 +38,14 @@ export async function getUserProfile(req: Request, res: Response) {
     };
     
     // Simuliamo l'errore se userId è vuoto
-    const profileError = !userId ? { message: 'Utente non trovato' } : null;
+    const profileError: Error | null = !userId ? new Error('Utente non trovato') : null;
     
     if (profileError) {
       console.error('Errore nel recupero del profilo utente:', profileError);
       return res.status(404).json({ 
         success: false, 
         message: 'Profilo utente non trovato',
-        error: profileError.message
+        error: profileError?.message || 'Errore sconosciuto'
       });
     }
     
@@ -65,6 +73,8 @@ export async function getUserProfile(req: Request, res: Response) {
     
     if (rewardsError) {
       console.error('Errore nel recupero dei premi dell\'utente:', rewardsError);
+      const typedError = rewardsError as PostgrestError;
+      console.error('Messaggio di errore:', typedError.message);
     }
     
     // Recupera badge dell'utente
@@ -87,6 +97,8 @@ export async function getUserProfile(req: Request, res: Response) {
     
     if (badgesError) {
       console.error('Errore nel recupero dei badge dell\'utente:', badgesError);
+      const typedError = badgesError as PostgrestError;
+      console.error('Messaggio di errore:', typedError.message);
     }
     
     // Recupera statistiche dell'utente
@@ -108,6 +120,8 @@ export async function getUserProfile(req: Request, res: Response) {
     
     if (statsError) {
       console.error('Errore nel recupero delle statistiche dell\'utente:', statsError);
+      const typedError = statsError as PostgrestError;
+      console.error('Messaggio di errore:', typedError.message);
     }
     
     // Prepara la risposta
@@ -167,29 +181,31 @@ export async function getUserGameBadges(req: Request, res: Response) {
       }
     ];
     
+    // Nella funzione getUserGameBadges
     // Simuliamo i badge del gioco
     const gameBadges = mockBadges;
-    const gameBadgesError = null;
+    const gameBadgesError: Error | null = null;
     
+    // Nella funzione getUserGameBadges, modifica la gestione degli errori
     if (gameBadgesError) {
       console.error('Errore nel recupero dei badge del gioco:', gameBadgesError);
       return res.status(500).json({ 
         success: false, 
         message: 'Errore nel recupero dei badge del gioco', 
-        error: gameBadgesError.message 
+        error: (gameBadgesError as Error).message || 'Errore sconosciuto'
       });
     }
     
     // Creiamo user badges mock
     const userBadges = [{ badge_id: 1, created_at: new Date().toISOString() }];
-    const userBadgesError = null;
+    const userBadgesError: Error | null = null;
     
     if (userBadgesError) {
       console.error('Errore nel recupero dei badge dell\'utente:', userBadgesError);
       return res.status(500).json({ 
         success: false, 
         message: 'Errore nel recupero dei badge dell\'utente', 
-        error: userBadgesError.message 
+        error: (userBadgesError as Error).message || 'Errore sconosciuto'
       });
     }
     
@@ -271,29 +287,31 @@ export async function getUserGameRewards(req: Request, res: Response) {
       }
     ];
     
+    // Nella funzione getUserGameRewards
     // Simuliamo i premi del gioco
     const gameRewards = mockRewards;
-    const gameRewardsError = null;
+    const gameRewardsError: Error | null = null;
     
+    // Nella funzione getUserGameRewards, modifica la gestione degli errori
     if (gameRewardsError) {
       console.error('Errore nel recupero dei premi del gioco:', gameRewardsError);
       return res.status(500).json({ 
         success: false, 
         message: 'Errore nel recupero dei premi del gioco', 
-        error: gameRewardsError.message 
+        error: (gameRewardsError as PostgrestError).message || 'Errore sconosciuto'
       });
     }
     
     // Creiamo user rewards mock
     const userRewards = [{ reward_id: 1, created_at: new Date().toISOString() }];
-    const userRewardsError = null;
+    const userRewardsError: Error | null = null;
     
     if (userRewardsError) {
       console.error('Errore nel recupero dei premi dell\'utente:', userRewardsError);
       return res.status(500).json({ 
         success: false, 
         message: 'Errore nel recupero dei premi dell\'utente', 
-        error: userRewardsError.message 
+        error: (userRewardsError as PostgrestError).message || 'Errore sconosciuto'
       });
     }
     
