@@ -11,3 +11,33 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+/* Fix per i dropdown trasparenti e le modali */
+@layer components {
+  [data-radix-popper-content-wrapper] {
+    background-color: white !important;
+  }
+
+  .Select__content,
+  [data-state="open"] [data-radix-select-content],
+  [data-radix-select-content] {
+    background-color: white !important;
+    border-color: #e2e8f0 !important;
+  }
+
+  /* Miglioramenti visuali per i dropdown e le modali */
+  [data-radix-popper-content-wrapper] {
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Stile per i contenuti dei dropdown */
+  [data-radix-select-viewport] {
+    padding: 0.25rem;
+  }
+
+  /* Stile per gli elementi delle modali */
+  .DialogContent {
+    background-color: white !important;
+  }
+}

@@ -15,10 +15,14 @@ export default function Dashboard() {
   const [currentGame, setCurrentGame] = useState<Game | null>(null);
 
   // Fetch dashboard stats
-  const { data: stats, isLoading: isLoadingStats } = useQuery<Stats>({
+  const { data: stats, isLoading: isLoadingStats, refetch: refetchStats } = useQuery<Stats>({
     queryKey: ['/api/stats'],
+    // Aggiungiamo queste opzioni per assicurarci che i dati siano sempre aggiornati
+    refetchOnWindowFocus: true,
+    staleTime: 0,
+    refetchInterval: 5000, // Aggiorna ogni 5 secondi come per i giochi
   });
-  
+
   // Fetch games
   // Update the query to use the Feltrinelli API endpoint
   const { data: games = [], isLoading: isLoadingGames } = useQuery<Game[]>({
@@ -48,14 +52,12 @@ export default function Dashboard() {
 
   // Handle edit game
   const handleEditGame = (game: Game) => {
-    console.log('Dashboard: Opening edit modal for game:', game);
-    // Invalidate game settings query before opening modal
-    queryClient.invalidateQueries({ 
-      queryKey: [`/api/feltrinelli/game-settings/${game.id}`] 
-    });
-    console.log(`Dashboard: Invalidated /api/feltrinelli/game-settings/${game.id}`);
-    setCurrentGame(game);
-    setIsModalOpen(true);
+    // Forza un refresh dei dati quando si chiude la modale
+    queryClient.invalidateQueries({ queryKey: ['/api/feltrinelli/games'] });
+    console.log('Dashboard: Invalidated games query after modal close');
+    
+    setIsModalOpen(false);
+    setCurrentGame(null);
   };
 
   // Toggle game status mutation
@@ -63,22 +65,32 @@ export default function Dashboard() {
   const toggleGameMutation = useMutation({
     mutationFn: async (gameId: number) => {
       // Get the current game state
-      const game = games.find(g => g.id === gameId);
-      if (!game) throw new Error('Game not found');
+      const gameToToggle = games.find(g => g.id === gameId);
+      if (!gameToToggle) throw new Error('Game not found');
+      
+      console.log(`Dashboard: Toggling game ${gameId} from ${gameToToggle.isActive} to ${!gameToToggle.isActive}`);
       
       // Use the Feltrinelli endpoint to update settings
       return await apiRequest(
         'PUT', 
         `/api/feltrinelli/games/${gameId}/settings`, 
-        { is_active: !game.isActive }
+        { is_active: !gameToToggle.isActive }
       );
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      console.log('Dashboard: Game toggle successful, invalidating queries');
+      
       // Invalidate both old and new queries for compatibility
       queryClient.invalidateQueries({ queryKey: ['/api/games'] });
       queryClient.invalidateQueries({ queryKey: ['/api/feltrinelli/games'] });
       queryClient.invalidateQueries({ queryKey: ['/api/feltrinelli/game-settings'] });
+      
+      // Forza un'invalidazione esplicita delle statistiche
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+      
+      // Forza un refetch immediato delle statistiche usando la funzione refetch
+      await refetchStats();
+      
       toast({
         title: "Game Status Updated",
         description: "The game status has been updated successfully.",

@@ -300,7 +300,214 @@ router.get('/game-settings/:gameId', async (req, res) => {
 });
 
 // Endpoint per recuperare tutti i premi
-router.get('/rewards-all', fltSimpleApi.getAllFLTRewards);
+router.get('/rewards', async (req, res) => {
+  try {
+    console.log('[FeltrinelliRouter] Fetching all rewards');
+    
+    const { data, error } = await supabase
+      .from('flt_rewards')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('[FeltrinelliRouter] Error fetching rewards:', error);
+      throw error;
+    }
+    
+    // Trasformiamo i dati per mantenere la compatibilità con il client
+    const formattedRewards = data.map(reward => ({
+      id: reward.id,
+      name: reward.name,
+      description: reward.description,
+      imageUrl: reward.image_url,
+      points: reward.points,
+      isActive: reward.is_active,
+      createdAt: reward.created_at,
+      updatedAt: reward.updated_at
+    }));
+    
+    console.log('[FeltrinelliRouter] Returning rewards:', formattedRewards);
+    res.json(formattedRewards);
+  } catch (error) {
+    console.error('[FeltrinelliRouter] Error in /rewards endpoint:', error);
+    res.status(500).json({ 
+      message: `Error fetching rewards: ${error instanceof Error ? error.message : 'Unknown error'}`
+    });
+  }
+});
+
+// Endpoint per recuperare un premio specifico
+router.get('/rewards/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const { data, error } = await supabase
+      .from('flt_rewards')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      console.error(`[FeltrinelliRouter] Error fetching reward ${id}:`, error);
+      throw error;
+    }
+    
+    // Trasformiamo i dati per mantenere la compatibilità con il client
+    const formattedReward = {
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      imageUrl: data.image_url,
+      points: data.points,
+      isActive: data.is_active,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    };
+    
+    res.json(formattedReward);
+  } catch (error) {
+    res.status(500).json({ 
+      message: `Error fetching reward: ${error instanceof Error ? error.message : 'Unknown error'}`
+    });
+  }
+});
+
+// Endpoint per creare un nuovo premio
+router.post('/rewards', async (req, res) => {
+  try {
+    const rewardData = req.body;
+    
+    if (!rewardData.name) {
+      return res.status(400).json({ message: 'Name is required' });
+    }
+    
+    const { data, error } = await supabase
+      .from('flt_rewards')
+      .insert({
+        name: rewardData.name,
+        description: rewardData.description || '',
+        image_url: rewardData.imageUrl || '',
+        points: rewardData.points || 0,
+        is_active: rewardData.isActive !== undefined ? rewardData.isActive : true,
+        created_at: new Date(),
+        updated_at: new Date()
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('[FeltrinelliRouter] Error creating reward:', error);
+      throw error;
+    }
+    
+    // Trasformiamo i dati per mantenere la compatibilità con il client
+    const formattedReward = {
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      imageUrl: data.image_url,
+      points: data.points,
+      isActive: data.is_active,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    };
+    
+    res.status(201).json(formattedReward);
+  } catch (error) {
+    res.status(500).json({ 
+      message: `Error creating reward: ${error instanceof Error ? error.message : 'Unknown error'}`
+    });
+  }
+});
+
+// Endpoint per aggiornare un premio esistente
+router.put('/rewards/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rewardData = req.body;
+    
+    const updateData: any = {
+      updated_at: new Date()
+    };
+    
+    if (rewardData.name !== undefined) updateData.name = rewardData.name;
+    if (rewardData.description !== undefined) updateData.description = rewardData.description;
+    if (rewardData.imageUrl !== undefined) updateData.image_url = rewardData.imageUrl;
+    if (rewardData.points !== undefined) updateData.points = rewardData.points;
+    if (rewardData.isActive !== undefined) updateData.is_active = rewardData.isActive;
+    
+    const { data, error } = await supabase
+      .from('flt_rewards')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error(`[FeltrinelliRouter] Error updating reward ${id}:`, error);
+      throw error;
+    }
+    
+    // Trasformiamo i dati per mantenere la compatibilità con il client
+    const formattedReward = {
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      imageUrl: data.image_url,
+      points: data.points,
+      isActive: data.is_active,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    };
+    
+    res.json(formattedReward);
+  } catch (error) {
+    res.status(500).json({ 
+      message: `Error updating reward: ${error instanceof Error ? error.message : 'Unknown error'}`
+    });
+  }
+});
+
+// Endpoint per aggiornare le impostazioni di un premio
+router.put('/rewards/:id/settings', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const settings = req.body;
+    
+    const { data, error } = await supabase
+      .from('flt_rewards')
+      .update({
+        is_active: settings.is_active !== undefined ? settings.is_active : true,
+        updated_at: new Date()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error(`[FeltrinelliRouter] Error updating reward settings ${id}:`, error);
+      throw error;
+    }
+    
+    // Trasformiamo i dati per mantenere la compatibilità con il client
+    const formattedReward = {
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      imageUrl: data.image_url,
+      points: data.points,
+      isActive: data.is_active,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    };
+    
+    res.json(formattedReward);
+  } catch (error) {
+    res.status(500).json({ 
+      message: `Error updating reward settings: ${error instanceof Error ? error.message : 'Unknown error'}`
+    });
+  }
+});
 
 // Endpoint per recuperare tutti i badges di un gioco
 router.get('/games/:gameId/badges', fltSimpleApi.getGameBadges);

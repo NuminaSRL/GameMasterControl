@@ -6,6 +6,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+// Modifica l'importazione
+import { configureUploadRoute } from './api/upload';
 
 // Configurazione per ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -41,6 +43,9 @@ async function startServer() {
     
     console.log('[Server] Health check endpoint registrato');
     
+    // Configura la route di upload
+    configureUploadRoute(app);
+    
     // Registra le route e ottieni il server HTTP
     console.log('[Server] Tentativo di registrare le route...');
     const httpServer = await registerRoutes(app);
@@ -63,3 +68,6 @@ async function startServer() {
 console.log('[Server] Chiamata a startServer()');
 startServer();
 console.log('[Server] Chiamata a startServer() completata');
+
+// Remove this line as it's now inside the startServer function
+// app.use('/api/upload', uploadRouter);

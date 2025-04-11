@@ -131,20 +131,18 @@ export interface Reward {
   id: number;
   name: string;
   description: string;
-  type: string;
-  value: string;
-  rank: number;
-  imageUrl?: string;
-  icon: string;
-  color: string;
-  available: number;
-  gameType: string;
-  feltrinelliRewardId?: string;
-  isImported: boolean;
-  pointsRequired: number;
-  originalImageUrl?: string;
-  syncedAt?: Date;
-  createdAt: Date;
+  imageUrl: string;
+  points: number;
+  isActive: boolean;
+  type?: string;
+  value?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  rank?: number;
+  icon?: string;
+  color?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface FltGame {

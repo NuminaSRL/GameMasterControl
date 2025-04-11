@@ -12,6 +12,10 @@ COPY . .
 # Create empty shared directory if not exists
 RUN mkdir -p ./shared
 
+# Installa le dipendenze necessarie per l'upload
+RUN npm install --save multer uuid
+RUN npm install --save-dev @types/multer @types/uuid
+
 # Verifichiamo il contenuto del file validators.ts prima della build
 RUN cat validators.ts
 

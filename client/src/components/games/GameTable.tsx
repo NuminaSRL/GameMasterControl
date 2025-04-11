@@ -95,7 +95,7 @@ export default function GameTable({ games, onEdit, onToggle }: GameTableProps) {
                 {game.monthlyLeaderboard ? 'Mensile' : ''}
                 {!game.weeklyLeaderboard && !game.monthlyLeaderboard ? 'Nessuna' : ''}
               </td>
-              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+              <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                 <button
                   onClick={() => onEdit(game)}
                   className="text-blue-600 hover:text-blue-900 mr-3"
