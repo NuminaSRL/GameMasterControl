@@ -3,6 +3,9 @@ import { gamesController } from '../controllers/games-controller';
 
 const router = Router();
 
+// Aggiungi questa route per aggiornare le impostazioni del gioco
+router.put('/games/:id/settings', gamesController.updateGameSettings);
+
 // Endpoint per recuperare tutti i giochi disponibili
 router.get('/', gamesController.getAllGames.bind(gamesController));
 

@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { gameService } from '../services/game-service';
+import { supabase } from '../../../supabase';
+
 
 /**
  * Controller per la gestione delle richieste relative ai giochi
@@ -64,6 +66,52 @@ export class GamesController {
       console.error(`[GamesController] Error fetching badges for game ${req.params.gameId}:`, error);
       res.status(500).json({ 
         message: `Error fetching game badges: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    }
+  }
+
+  /**
+   * Aggiorna le impostazioni di un gioco specifico
+   */
+  async updateGameSettings(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const settings = req.body;
+      
+      console.log(`[GamesController] Updating settings for Feltrinelli game ${id}:`, settings);
+      
+      // Verifica che i campi necessari siano presenti
+      if (!settings.timer_duration && settings.timer_duration !== 0) {
+        console.warn(`[GamesController] Missing timer_duration field for game ${id}`);
+        return res.status(400).json({ 
+          message: 'Missing required settings field: timer_duration'
+        });
+      }
+      
+      // Aggiorna le impostazioni nella tabella flt_game_settings
+      const { data, error } = await supabase
+        .from('flt_game_settings')
+        .upsert({
+          game_id: id,
+          timer_duration: settings.timer_duration,
+          question_count: settings.question_count || 10,
+          difficulty: settings.difficulty || 1,
+          updated_at: new Date()
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error(`[GamesController] Error updating settings in database:`, error);
+        throw error;
+      }
+      
+      console.log(`[GamesController] Settings updated successfully:`, data);
+      res.json(data);
+    } catch (error) {
+      console.error('[GamesController] Error updating game settings:', error);
+      res.status(500).json({ 
+        message: `Error updating game settings: ${error instanceof Error ? error.message : 'Unknown error'}`
       });
     }
   }

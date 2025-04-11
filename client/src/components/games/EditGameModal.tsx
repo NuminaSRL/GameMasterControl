@@ -46,7 +46,7 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
 
   // Fetch badges for this game if editing
   const { data: gameBadges = [] } = useQuery<Badge[]>({
-    queryKey: ['/api/games', game?.id, 'badges'],
+    queryKey: ['/api/feltrinelli/games', game?.id, 'badges'],
     enabled: isOpen && isEditing,
   });
 
@@ -78,7 +78,17 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
       fetch('/api/feltrinelli/game-ids')
         .then(res => res.json())
         .then(data => {
+          console.log('Received game IDs from server:', data);
           setGameIds(data);
+          
+          // Se stiamo modificando un gioco esistente, non sovrascrivere l'ID Feltrinelli
+          if (!isEditing) {
+            // Aggiorna l'ID Feltrinelli solo per i nuovi giochi
+            const gameType = form.getValues('gameType');
+            if (gameType && data[gameType]) {
+              form.setValue('feltrinelliGameId', data[gameType]);
+            }
+          }
         })
         .catch(error => {
           console.error('Failed to fetch game IDs:', error);
@@ -89,7 +99,7 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
           });
         });
     }
-  }, [isOpen, toast]);
+  }, [isOpen, toast, form, isEditing]);
 
   // Reset form when game changes
   useEffect(() => {
@@ -126,12 +136,42 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
   const saveMutation = useMutation({
     mutationFn: async (data: FormValues) => {
       const { badges, ...gameData } = data;
-
+      
+      console.log('Form data to save:', data);
+  
+      // Nella funzione saveMutation
       if (isEditing && game) {
-        // Update existing game
-        const res = await apiRequest('PATCH', `/api/games/${game.id}`, gameData);
-        const updatedGame = await res.json();
-
+        console.log('Updating existing game:', game.id);
+        console.log('Game object:', game);
+        
+        // Prepara i dati nel formato corretto per l'API Feltrinelli
+        const feltrinelliData = {
+          timer_duration: gameData.timerDuration,
+          question_count: gameData.questionCount,
+          difficulty: gameData.difficulty,
+          is_active: gameData.isActive,
+          weekly_leaderboard: gameData.weeklyLeaderboard,
+          monthly_leaderboard: gameData.monthlyLeaderboard,
+          game_type: gameData.gameType,
+          // Aggiungi esplicitamente l'ID Feltrinelli
+          feltrinelli_id: gameData.feltrinelliGameId,
+          // Aggiungi name e description
+          name: gameData.name,
+          description: gameData.description
+        };
+        
+        console.log('Sending data to Feltrinelli API:', feltrinelliData);
+        console.log('Game ID for API call:', game.id);
+        
+        // Utilizza direttamente apiRequest invece di updateFeltrinelliGameSettings
+        const updatedGame = await apiRequest(
+          'PUT',
+          `/api/feltrinelli/games/${game.id}/settings`,
+          feltrinelliData
+        );
+        
+        console.log('Game updated successfully:', updatedGame);
+         
         // Update badges if provided
         if (badges) {
           // First, get existing badges
@@ -142,6 +182,9 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
           
           // Find badges to remove
           const badgesToRemove = existingBadgeIds.filter(id => !badges.includes(id));
+          
+          console.log('Badges to add:', badgesToAdd);
+          console.log('Badges to remove:', badgesToRemove);
           
           // Add new badges
           await Promise.all(
@@ -161,8 +204,8 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
         return updatedGame;
       } else {
         // Create new game
-        const res = await apiRequest('POST', '/api/games', gameData);
-        const newGame = await res.json();
+        console.log('Creating new game');
+        const newGame = await apiRequest('POST', '/api/games', gameData);
         
         // Assign badges if provided
         if (badges && badges.length > 0) {
@@ -176,18 +219,37 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
         return newGame;
       }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('saveMutation onSuccess called with data:', data);
+      
       toast({
         title: isEditing ? "Gioco aggiornato" : "Gioco creato",
         description: isEditing 
           ? "Il gioco è stato aggiornato con successo"
           : "Il nuovo gioco è stato creato con successo",
       });
+      
+      // Log before invalidating queries
+      console.log('Invalidating queries for game ID:', game?.id);
+      
+      // Aggiorna sia le query vecchie che quelle nuove per garantire la compatibilità
       queryClient.invalidateQueries({ queryKey: ['/api/games'] });
+      console.log('Invalidated /api/games');
+      
+      queryClient.invalidateQueries({ queryKey: ['/api/feltrinelli/games'] });
+      console.log('Invalidated /api/feltrinelli/games');
+      
+      queryClient.invalidateQueries({ queryKey: [`/api/feltrinelli/game-settings/${game?.id}`] });
+      console.log(`Invalidated /api/feltrinelli/game-settings/${game?.id}`);
+      
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+      console.log('Invalidated /api/stats');
+      
+      console.log('All queries invalidated, closing modal');
       onClose();
     },
     onError: (error) => {
+      console.error('saveMutation onError called with error:', error);
       toast({
         title: "Errore",
         description: `Non è stato possibile ${isEditing ? 'aggiornare' : 'creare'} il gioco: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`,
@@ -198,7 +260,31 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
 
   // Form submission
   const onSubmit = (data: FormValues) => {
-    saveMutation.mutate(data);
+    console.log('Form submitted with data:', data);
+    try {
+      console.log('Calling saveMutation.mutate with data');
+      saveMutation.mutate(data);
+      console.log('saveMutation.mutate called successfully');
+    } catch (error) {
+      console.error('Error calling saveMutation.mutate:', error);
+    }
+  };
+
+  // Aggiungi una funzione di debug per il click diretto
+  const handleManualSubmit = () => {
+    console.log('Manual submit button clicked');
+    console.log('Current form values:', form.getValues());
+    
+    try {
+      console.log('Calling form.handleSubmit');
+      const result = form.handleSubmit((data) => {
+        console.log('Inside form.handleSubmit callback with data:', data);
+        onSubmit(data);
+      })();
+      console.log('form.handleSubmit result:', result);
+    } catch (error) {
+      console.error('Error in handleManualSubmit:', error);
+    }
   };
 
   return (
@@ -212,7 +298,10 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-3">
+          <form onSubmit={form.handleSubmit((data) => {
+            console.log('Form onSubmit handler called with data:', data);
+            onSubmit(data);
+          })} className="space-y-6 py-3">
             <div className="bg-blue-50 p-4 rounded-lg mb-4 text-sm text-blue-700 border border-blue-100">
               <div className="flex items-center">
                 <i className="fas fa-info-circle mr-2 text-blue-500"></i>
@@ -520,9 +609,15 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
                 Annulla
               </Button>
               <Button 
-                type="submit"
+                type="button" // Cambiato da "submit" a "button" per debug
                 className="bg-blue-600 hover:bg-blue-700"
                 disabled={saveMutation.isPending}
+                onClick={() => {
+                  console.log('Manual submit button clicked');
+                  const values = form.getValues();
+                  console.log('Current form values:', values);
+                  onSubmit(values);
+                }}
               >
                 {saveMutation.isPending ? (
                   <>

@@ -7,6 +7,9 @@ interface GameRowProps {
 }
 
 export default function GameRow({ game, onEdit, onToggle }: GameRowProps) {
+  // Log dei dati del gioco per debug
+  console.log('GameRow rendering with game data:', game);
+  
   // Generate CSS classes for different game types
   const getIconClass = () => {
     if (game.name.toLowerCase().includes("quiz")) {

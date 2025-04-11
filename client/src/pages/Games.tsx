@@ -15,17 +15,35 @@ export default function Games() {
 
   // Fetch games
   const { data: games = [], isLoading, error } = useQuery<Game[]>({
-    queryKey: ['/api/games'],
+    queryKey: ['/api/feltrinelli/games'],
+    queryFn: async () => {
+      const response = await fetch('/api/feltrinelli/games');
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      const data = await response.json();
+      console.log('Fetched games from Feltrinelli API:', data);
+      return data;
+    }
   });
 
   // Toggle game status mutation
   const toggleGameMutation = useMutation({
     mutationFn: async (gameId: number) => {
-      const res = await apiRequest('POST', `/api/games/${gameId}/toggle`, undefined);
-      return res.json();
+      // Ottieni lo stato attuale del gioco
+      const game = games.find(g => g.id === gameId);
+      if (!game) throw new Error('Gioco non trovato');
+      
+      // Usa l'endpoint Feltrinelli per aggiornare le impostazioni
+      const res = await apiRequest('PUT', `/api/feltrinelli/games/${gameId}/settings`, {
+        is_active: !game.isActive
+      });
+      return res;
     },
     onSuccess: () => {
+      // Aggiorna sia le query vecchie che quelle nuove per garantire la compatibilità
       queryClient.invalidateQueries({ queryKey: ['/api/games'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/feltrinelli/games'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       toast({
         title: "Stato Gioco Aggiornato",
@@ -33,6 +51,7 @@ export default function Games() {
       });
     },
     onError: (error) => {
+      console.error('Error toggling game status:', error);
       toast({
         title: "Errore",
         description: `Non è stato possibile aggiornare lo stato del gioco: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`,

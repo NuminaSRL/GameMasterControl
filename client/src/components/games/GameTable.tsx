@@ -46,7 +46,7 @@ export default function GameTable({ games, onEdit, onToggle }: GameTableProps) {
           {paginatedGames.map((game) => (
             <GameRow 
               key={game.id} 
-              game={game as any} // Utilizziamo un type assertion temporaneo
+              game={game} // Rimuovi il type assertion "as any"
               onEdit={() => onEdit(game)}
               onToggle={() => onToggle(game.id)}
             />

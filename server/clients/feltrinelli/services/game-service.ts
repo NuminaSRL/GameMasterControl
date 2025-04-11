@@ -118,6 +118,53 @@ export class GameService {
       throw error;
     }
   }
+
+  /**
+   * Aggiorna le impostazioni di un gioco
+   */
+  async updateGameSettings(gameId: string, settings: Partial<GameSettings>): Promise<GameSettings> {
+    try {
+      console.log(`📣 CALLED: updateGameSettings(${gameId}) from clients/feltrinelli/services/game-service.ts`);
+      console.log(`Settings to update:`, settings);
+      
+      // Prima otteniamo il gioco corrente
+      const { data: gameData, error: gameError } = await supabase
+        .from('flt_games')  // Assicurati che stiamo usando la tabella flt_games
+        .select('settings')
+        .eq('id', gameId)
+        .single();
+      
+      if (gameError) throw gameError;
+      if (!gameData) throw new Error(`Game with ID ${gameId} not found`);
+      
+      // Combiniamo le impostazioni esistenti con quelle nuove
+      const currentSettings = gameData.settings || {};
+      const updatedSettings = { ...currentSettings, ...settings };
+      
+      console.log(`Current settings:`, currentSettings);
+      console.log(`Updated settings:`, updatedSettings);
+      
+      // Aggiorniamo le impostazioni nel database
+      const { data, error } = await supabase
+        .from('flt_games')  // Assicurati che stiamo usando la tabella flt_games
+        .update({ settings: updatedSettings })
+        .eq('id', gameId)
+        .select('settings')
+        .single();
+      
+      if (error) {
+        console.error(`Error updating settings in database:`, error);
+        throw error;
+      }
+      if (!data) throw new Error(`Failed to update settings for game ${gameId}`);
+      
+      console.log(`Settings updated successfully:`, data.settings);
+      return data.settings;
+    } catch (error) {
+      console.error(`[GameService] Error updating settings for game ${gameId}:`, error);
+      throw error;
+    }
+  }
 }
 
 // Esporta un'istanza singleton del servizio

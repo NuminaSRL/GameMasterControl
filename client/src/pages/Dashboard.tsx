@@ -20,22 +20,68 @@ export default function Dashboard() {
   });
   
   // Fetch games
+  // Update the query to use the Feltrinelli API endpoint
   const { data: games = [], isLoading: isLoadingGames } = useQuery<Game[]>({
-    queryKey: ['/api/games'],
+    queryKey: ['/api/feltrinelli/games'],
+    queryFn: async () => {
+      console.log('Dashboard: Fetching games from Feltrinelli API');
+      const response = await fetch('/api/feltrinelli/games');
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      const data = await response.json();
+      console.log('Dashboard: Fetched games from Feltrinelli API:', data);
+      
+      // Aggiungiamo un log per verificare i valori specifici
+      if (data && data.length > 0) {
+        console.log('Dashboard: Primo gioco timerDuration:', data[0].timerDuration);
+      }
+      
+      return data;
+    },
+    // Aggiungiamo refetchInterval per forzare l'aggiornamento periodico
+    refetchInterval: 5000, // Aggiorna ogni 5 secondi
+    // Assicuriamoci che la cache venga invalidata correttamente
+    refetchOnWindowFocus: true,
+    staleTime: 0
   });
 
+  // Handle edit game
+  const handleEditGame = (game: Game) => {
+    console.log('Dashboard: Opening edit modal for game:', game);
+    // Invalidate game settings query before opening modal
+    queryClient.invalidateQueries({ 
+      queryKey: [`/api/feltrinelli/game-settings/${game.id}`] 
+    });
+    console.log(`Dashboard: Invalidated /api/feltrinelli/game-settings/${game.id}`);
+    setCurrentGame(game);
+    setIsModalOpen(true);
+  };
+
   // Toggle game status mutation
+  // Update the toggle game mutation to use the Feltrinelli API
   const toggleGameMutation = useMutation({
     mutationFn: async (gameId: number) => {
-      const res = await apiRequest('POST', `/api/games/${gameId}/toggle`, undefined);
-      return res.json();
+      // Get the current game state
+      const game = games.find(g => g.id === gameId);
+      if (!game) throw new Error('Game not found');
+      
+      // Use the Feltrinelli endpoint to update settings
+      return await apiRequest(
+        'PUT', 
+        `/api/feltrinelli/games/${gameId}/settings`, 
+        { is_active: !game.isActive }
+      );
     },
     onSuccess: () => {
+      // Invalidate both old and new queries for compatibility
       queryClient.invalidateQueries({ queryKey: ['/api/games'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/feltrinelli/games'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/feltrinelli/game-settings'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       toast({
-        title: "Stato Gioco Aggiornato",
-        description: "Lo stato del gioco è stato aggiornato con successo.",
+        title: "Game Status Updated",
+        description: "The game status has been updated successfully.",
       });
     },
     onError: (error) => {
@@ -47,19 +93,17 @@ export default function Dashboard() {
     },
   });
 
-  // Handle edit game
-  const handleEditGame = (game: Game) => {
-    setCurrentGame(game);
-    setIsModalOpen(true);
-  };
-
   // Handle toggle game status
   const handleToggleGameStatus = (gameId: number) => {
     toggleGameMutation.mutate(gameId);
   };
 
-  // Close modal
+  // Close modal - manteniamo solo questa definizione
   const handleCloseModal = () => {
+    // Forza un refresh dei dati quando si chiude la modale
+    queryClient.invalidateQueries({ queryKey: ['/api/feltrinelli/games'] });
+    console.log('Dashboard: Invalidated games query after modal close');
+    
     setIsModalOpen(false);
     setCurrentGame(null);
   };
