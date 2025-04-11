@@ -1,12 +1,31 @@
 import { useState } from "react";
 import { Game } from '../../shared/schema';
-import GameRow from "./GameRow";
 
 interface GameTableProps {
   games: Game[];
   onEdit: (game: Game) => void;
   onToggle: (gameId: number) => void;
 }
+
+// Aggiungi una funzione per convertire il livello di difficoltà in testo
+const getDifficultyText = (difficulty: number) => {
+  switch(difficulty) {
+    case 1: return "Facile";
+    case 2: return "Medio";
+    case 3: return "Difficile";
+    default: return "Facile";
+  }
+};
+
+// Aggiungi una funzione per ottenere il colore della difficoltà
+const getDifficultyColor = (difficulty: number) => {
+  switch(difficulty) {
+    case 1: return "bg-green-100 text-green-800";
+    case 2: return "bg-yellow-100 text-yellow-800";
+    case 3: return "bg-red-100 text-red-800";
+    default: return "bg-green-100 text-green-800";
+  }
+};
 
 export default function GameTable({ games, onEdit, onToggle }: GameTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
@@ -29,6 +48,9 @@ export default function GameTable({ games, onEdit, onToggle }: GameTableProps) {
               Stato
             </th>
             <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+              Difficoltà
+            </th>
+            <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
               Timer
             </th>
             <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -37,23 +59,63 @@ export default function GameTable({ games, onEdit, onToggle }: GameTableProps) {
             <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
               Classifiche
             </th>
-            <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+            <th scope="col" className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
               Azioni
             </th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {paginatedGames.map((game) => (
-            <GameRow 
-              key={game.id} 
-              game={game} // Rimuovi il type assertion "as any"
-              onEdit={() => onEdit(game)}
-              onToggle={() => onToggle(game.id)}
-            />
+            <tr key={game.id} className="hover:bg-gray-50">
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="text-sm font-medium text-gray-900">{game.name}</div>
+                <div className="text-sm text-gray-500 truncate max-w-xs">{game.description}</div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                  game.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }`}>
+                  {game.isActive ? 'Attivo' : 'Inattivo'}
+                </span>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getDifficultyColor(game.difficulty)}`}>
+                  {getDifficultyText(game.difficulty)}
+                </span>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {game.timerDuration} sec
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {game.questionCount}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {game.weeklyLeaderboard ? 'Settimanale' : ''} 
+                {game.weeklyLeaderboard && game.monthlyLeaderboard ? ' / ' : ''}
+                {game.monthlyLeaderboard ? 'Mensile' : ''}
+                {!game.weeklyLeaderboard && !game.monthlyLeaderboard ? 'Nessuna' : ''}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <button
+                  onClick={() => onEdit(game)}
+                  className="text-blue-600 hover:text-blue-900 mr-3"
+                >
+                  <i className="fas fa-edit"></i>
+                </button>
+                <button
+                  onClick={() => onToggle(game.id)}
+                  className={`${
+                    game.isActive ? 'text-green-600 hover:text-green-900' : 'text-red-600 hover:text-red-900'
+                  }`}
+                >
+                  <i className={`fas ${game.isActive ? 'fa-toggle-on' : 'fa-toggle-off'}`}></i>
+                </button>
+              </td>
+            </tr>
           ))}
           {paginatedGames.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+              <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                 <i className="fas fa-gamepad text-gray-300 text-4xl mb-3"></i>
                 <p>Nessun gioco trovato</p>
               </td>
@@ -62,6 +124,7 @@ export default function GameTable({ games, onEdit, onToggle }: GameTableProps) {
         </tbody>
       </table>
       
+      {/* Pagination controls remain the same */}
       {totalPages > 1 && (
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
           <div className="flex justify-between items-center">
