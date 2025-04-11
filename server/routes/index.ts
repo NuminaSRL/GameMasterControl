@@ -15,6 +15,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 
+
 // Aggiungi questo codice per definire __dirname in un modulo ES
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -71,7 +72,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-
+  console.log('[Routes] Registering Feltrinelli routes...');
+  try {
+    app.use('/api/feltrinelli', feltrinelliRouter);
+    console.log('[Routes] Feltrinelli routes registered successfully');
+  } catch (error) {
+    console.error('[Routes] Error registering Feltrinelli routes:', error);
+  }
 
   // Sessione di gioco - sia con /api/games/session che con /api/feltrinelli/session
   app.post('/api/games/session', async (req, res) => {

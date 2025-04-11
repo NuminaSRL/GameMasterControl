@@ -5,11 +5,16 @@ import { Game, GameSettings } from '../models/game.model';
  * Servizio per la gestione dei giochi Feltrinelli
  */
 export class GameService {
+  constructor() {
+    console.log('🔍 INITIALIZED: GameService from clients/feltrinelli/services/game-service.ts');
+  }
+
   /**
    * Recupera tutti i giochi disponibili
    */
   async getAllGames(): Promise<Game[]> {
     try {
+      console.log('📣 CALLED: getAllGames from clients/feltrinelli/services/game-service.ts');
       const { data, error } = await supabase
         .from('flt_games')
         .select('*')
@@ -33,12 +38,10 @@ export class GameService {
     }
   }
 
-  /**
-   * Recupera un gioco specifico con le sue impostazioni
-   * @param id ID del gioco
-   */
+  // Add similar logging to other methods
   async getGame(id: string): Promise<Game> {
     try {
+      console.log(`📣 CALLED: getGame(${id}) from clients/feltrinelli/services/game-service.ts`);
       const { data, error } = await supabase
         .from('flt_games')
         .select('*')

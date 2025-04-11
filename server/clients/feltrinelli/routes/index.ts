@@ -11,9 +11,12 @@ import gameRoutes from './game-routes';
 const feltrinelliRouter = Router();
 
 // Determine if we should use the new implementation based on config
-const useNewImplementation = config.ENABLE_NEW_FELTRINELLI_IMPLEMENTATION === 'true';
+const useNewImplementation = config.ENABLE_NEW_FELTRINELLI_IMPLEMENTATION;
+
+console.log(`[Feltrinelli Router] Feature flag ENABLE_NEW_FELTRINELLI_IMPLEMENTATION = ${useNewImplementation}`);
 
 if (useNewImplementation) {
+  console.log('[Feltrinelli Router] Using NEW implementation');
   // Import and use the new implementation
   feltrinelliRouter.use('/games', gameRoutes);
   
@@ -29,6 +32,7 @@ if (useNewImplementation) {
   feltrinelliRouter.get('/badges/:id', oldHandlers.getFLTBadge);
   // Add other fallback routes as needed
 } else {
+  console.log('[Feltrinelli Router] Using OLD implementation');
   // Use the old implementation (just pass through to the existing handlers)
   const oldHandlers = require('../../../flt-simple-api');
   
