@@ -22,6 +22,10 @@ if (fs.existsSync(envPath)) {
   console.warn('[Config] File .env non trovato');
 }
 
+// Verifica configurazione Supabase
+console.log('[Supabase] URL:', process.env.SUPABASE_URL ? 'Configurato' : 'Mancante');
+console.log('[Supabase] Service Role Key:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Configurato' : 'Mancante');
+
 console.log('[Server] Importazioni completate');
 
 async function startServer() {
@@ -32,6 +36,38 @@ async function startServer() {
     // Middleware essenziali
     app.use(cors());
     app.use(express.json());
+    
+    // Configura la route di upload con Supabase
+    configureUploadRoute(app);
+    
+    // Aggiungi questo blocco per configurare i file statici
+    const uploadsPath = path.join(process.cwd(), 'public/uploads');
+    console.log('[Server] Configurazione percorso uploads:', uploadsPath);
+    
+    // Creiamo la directory se non esiste
+    if (!fs.existsSync(path.join(process.cwd(), 'public'))) {
+      console.log('[Server] Creazione directory public');
+      fs.mkdirSync(path.join(process.cwd(), 'public'), { recursive: true });
+    }
+    
+    if (!fs.existsSync(uploadsPath)) {
+      console.log('[Server] Creazione directory uploads');
+      fs.mkdirSync(uploadsPath, { recursive: true });
+      try {
+        fs.chmodSync(uploadsPath, 0o755);
+        console.log('[Server] Permessi impostati per directory uploads');
+      } catch (err) {
+        console.error('[Server] Errore impostazione permessi:', err);
+      }
+    }
+    
+    // Servi file statici da /uploads
+    app.use('/uploads', express.static(uploadsPath, {
+      fallthrough: false, // Ritorna 404 invece di passare alla prossima route
+      etag: true,         // Abilita ETag per cache
+      maxAge: '1h',       // Cache per un'ora
+    }));
+    console.log('[Server] Route statica uploads configurata');
     
     console.log('[Server] Inizializzazione server...');
     

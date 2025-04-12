@@ -14,11 +14,15 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
+import { configureUploadRoute } from '../api/upload';
+import { configureDebugRoutes } from '../api/debug';
+
 
 
 // Aggiungi questo codice per definire __dirname in un modulo ES
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
 
 // Verifica se il file .env esiste e lo carica
 const envPath = path.resolve(__dirname, '../.env');// Aggiornato per riflettere la posizione corretta
@@ -39,6 +43,32 @@ console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'Presente' : 'Assente');
 export async function registerRoutes(app: Express): Promise<Server> {
   // Create HTTP server
   const httpServer = createServer(app);
+
+  // Controllo delle directory per ambiente di produzione
+  if (process.env.NODE_ENV === 'production') {
+    const uploadPath = path.join(process.cwd(), 'public/uploads');
+    console.log('[Server] Verificando directory public/uploads in produzione:', uploadPath);
+    
+    if (!fs.existsSync(path.join(process.cwd(), 'public'))) {
+      console.log('[Server] Creazione directory public');
+      fs.mkdirSync(path.join(process.cwd(), 'public'), { recursive: true });
+    }
+    
+    if (!fs.existsSync(uploadPath)) {
+      console.log('[Server] Creazione directory uploads');
+      fs.mkdirSync(uploadPath, { recursive: true });
+      try {
+        fs.chmodSync(uploadPath, 0o755);
+        console.log('[Server] Permessi impostati per directory uploads');
+      } catch (err) {
+        console.error('[Server] Errore impostazione permessi:', err);
+      }
+    }
+  }
+
+    // Configura le route di upload e debug
+    configureUploadRoute(app);
+    configureDebugRoutes(app);
 
   // === FELTRINELLI API INTEGRATION - NUOVA VERSIONE ===
 

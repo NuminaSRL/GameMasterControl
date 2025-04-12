@@ -68,6 +68,29 @@ export default function RewardList() {
     },
   });
 
+  // Delete reward mutation
+  const deleteRewardMutation = useMutation({
+    mutationFn: async (rewardId: number) => {
+      return await apiRequest('DELETE', `/api/feltrinelli/rewards/${rewardId}`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/feltrinelli/rewards'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+      
+      toast({
+        title: "Premio Eliminato",
+        description: "Il premio è stato eliminato con successo.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Errore",
+        description: `Non è stato possibile eliminare il premio: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`,
+        variant: "destructive",
+      });
+    },
+  });
+
   // Handle edit reward
   const handleEditReward = (reward: Reward) => {
     setCurrentReward(reward);
@@ -90,6 +113,13 @@ export default function RewardList() {
   const handleAddReward = () => {
     setCurrentReward(null);
     setIsModalOpen(true);
+  };
+  
+  // Handle delete reward
+  const handleDeleteReward = (rewardId: number) => {
+    if (window.confirm("Sei sicuro di voler eliminare questo premio? Questa azione non può essere annullata.")) {
+      deleteRewardMutation.mutate(rewardId);
+    }
   };
 
   return (
@@ -132,6 +162,39 @@ export default function RewardList() {
                 <p className="text-sm text-gray-600 mb-2 flex-grow">{reward.description}</p>
                 <div className="flex justify-between items-center mt-2">
                   <span className="text-sm font-semibold">{reward.points} punti</span>
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="h-8 px-2 border-gray-300"
+                      onClick={() => handleToggleRewardStatus(reward.id)}
+                    >
+                      {reward.isActive ? (
+                        <i className="fas fa-toggle-on text-green-500 mr-1"></i>
+                      ) : (
+                        <i className="fas fa-toggle-off text-red-500 mr-1"></i>
+                      )}
+                      {reward.isActive ? 'Disattiva' : 'Attiva'}
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="h-8 px-2 border-gray-300"
+                      onClick={() => handleEditReward(reward)}
+                    >
+                      <i className="fas fa-edit text-blue-500 mr-1"></i>
+                      Modifica
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="h-8 px-2 border-gray-300 hover:bg-red-50"
+                      onClick={() => handleDeleteReward(reward.id)}
+                    >
+                      <i className="fas fa-times text-red-500 mr-1"></i>
+                      Elimina
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}

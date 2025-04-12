@@ -97,7 +97,40 @@ export default function EditRewardModal({ isOpen, onClose, reward }: EditRewardM
     }));
   };
 
-  // Aggiungi questa funzione per gestire l'upload delle immagini
+  // Funzione per ottenere l'URL completo dell'immagine
+  const getImageUrl = (url: string) => {
+    if (!url) return '';
+    
+    // Se è già un URL completo
+    if (url.startsWith('http')) return url;
+    
+    // Se è un URL di Supabase (inizia con /uploads/ e contiene un UUID)
+    if (url.startsWith('/uploads/')) {
+      // Estrai solo il nome del file
+      const fileName = url.split('/').pop();
+      // Costruisci l'URL completo di Supabase
+      return `${import.meta.env.VITE_SUPABASE_STORAGE_URL}/uploads/${fileName}`;
+    }
+    
+    // Per URL relativi tradizionali, aggiungi il dominio corrente
+    return `${window.location.origin}${url}`;
+  };
+
+  // Funzione per gestire l'upload delle immagini
+  // Aggiungi questa funzione di debug temporanea
+  const debugImagePath = async () => {
+    try {
+      const response = await fetch('/api/debug-upload-path', {
+        method: 'GET',
+      });
+      const data = await response.json();
+      console.log('Debug percorsi upload:', data);
+    } catch (error) {
+      console.error('Errore debug upload:', error);
+    }
+  };
+  
+  // Chiama questa funzione quando carichi un'immagine
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     
@@ -106,13 +139,16 @@ export default function EditRewardModal({ isOpen, onClose, reward }: EditRewardM
     formDataUpload.append('image', file);
     
     try {
+      // Per debug
+      await debugImagePath();
+      
       // Mostra un toast di caricamento
       toast({
         title: "Caricamento in corso",
         description: "Stiamo caricando la tua immagine...",
       });
       
-      // Invia il file al server
+      // Correzione del percorso API da /api/feltrinelli/upload a /api/upload
       const response = await fetch('/api/upload', {
         method: 'POST',
         body: formDataUpload,
@@ -121,6 +157,8 @@ export default function EditRewardModal({ isOpen, onClose, reward }: EditRewardM
       if (!response.ok) throw new Error('Errore durante il caricamento');
       
       const data = await response.json();
+      
+      console.log('Immagine caricata:', data);
       
       // Aggiorna il formData con l'URL dell'immagine caricata
       setFormData(prev => ({
@@ -133,6 +171,7 @@ export default function EditRewardModal({ isOpen, onClose, reward }: EditRewardM
         description: "L'immagine è stata caricata con successo.",
       });
     } catch (error) {
+      console.error('Errore upload:', error);
       toast({
         title: "Errore",
         description: `Non è stato possibile caricare l'immagine: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`,
@@ -172,10 +211,42 @@ export default function EditRewardModal({ isOpen, onClose, reward }: EditRewardM
     },
   });
 
+  // Aggiungiamo la mutation per la cancellazione
+  const deleteRewardMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('DELETE', `/api/feltrinelli/rewards/${reward?.id}`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/feltrinelli/rewards'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+      
+      toast({
+        title: "Premio Eliminato",
+        description: "Il premio è stato eliminato con successo.",
+      });
+      
+      onClose();
+    },
+    onError: (error) => {
+      toast({
+        title: "Errore",
+        description: `Non è stato possibile eliminare il premio: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`,
+        variant: "destructive",
+      });
+    },
+  });
+
   // Handle form submit
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     saveRewardMutation.mutate();
+  };
+
+  // Aggiungiamo la funzione per gestire la cancellazione con conferma
+  const handleDelete = () => {
+    if (window.confirm("Sei sicuro di voler eliminare questo premio? Questa azione non può essere annullata.")) {
+      deleteRewardMutation.mutate();
+    }
   };
 
   return (
@@ -217,7 +288,7 @@ export default function EditRewardModal({ isOpen, onClose, reward }: EditRewardM
                 {formData.imageUrl && (
                   <div className="relative w-full h-48 bg-gray-50 rounded-lg overflow-hidden border border-gray-200">
                     <img 
-                      src={formData.imageUrl} 
+                      src={getImageUrl(formData.imageUrl)} 
                       alt="Anteprima premio" 
                       className="w-full h-full object-contain"
                     />
@@ -314,23 +385,17 @@ export default function EditRewardModal({ isOpen, onClose, reward }: EditRewardM
             
             <div className="space-y-2">
               <Label htmlFor="isActive" className="font-medium">Stato Premio</Label>
-              <div className="h-10 flex items-center px-3 py-2 border border-gray-300 rounded-md bg-white">
-                <div className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  formData.isActive 
-                    ? 'bg-green-100 text-green-700' 
-                    : 'bg-red-100 text-red-700'
-                }`}>
-                  {formData.isActive ? 'Attivo' : 'Inattivo'}
-                </div>
-                <div className="ml-auto">
+              <div className="flex items-center p-3 border rounded-md border-gray-300 bg-white">
+                <div className="flex items-center gap-2">
                   <Switch
                     id="isActive"
                     checked={formData.isActive}
                     onCheckedChange={handleSwitchChange}
-                    className={`${
-                      formData.isActive ? 'bg-green-500' : 'bg-red-500'
-                    } data-[state=unchecked]:bg-gray-200 data-[state=unchecked]:border-gray-300`}
+                    className={`${formData.isActive ? 'bg-green-500' : 'bg-red-500'}`}
                   />
+                  <span className={`text-sm font-medium ${formData.isActive ? 'text-green-700' : 'text-red-700'}`}>
+                    {formData.isActive ? 'Premio Attivo' : 'Premio Inattivo'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -406,6 +471,24 @@ export default function EditRewardModal({ isOpen, onClose, reward }: EditRewardM
           </div>
           
           <DialogFooter className="pt-2">
+            {!isNewReward && (
+              <Button 
+                type="button" 
+                variant="destructive" 
+                onClick={handleDelete}
+                disabled={deleteRewardMutation.isPending}
+                className="mr-auto"
+              >
+                {deleteRewardMutation.isPending ? (
+                  <>
+                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-b-transparent rounded-full"></div>
+                    Eliminazione...
+                  </>
+                ) : (
+                  'Elimina Premio'
+                )}
+              </Button>
+            )}
             <Button 
               type="button" 
               variant="outline" 

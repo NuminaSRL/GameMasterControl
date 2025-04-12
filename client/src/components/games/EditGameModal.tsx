@@ -24,7 +24,7 @@ interface EditGameModalProps {
 // Create a form schema based on the insertGameSchema
 const formSchema = insertGameSchema.extend({
   badges: z.array(z.number()).optional(),
-});
+}).omit({ reward: true }); // Rimuovi la proprietà reward dallo schema
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -59,7 +59,7 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
     questionCount: game?.questionCount || 10,
     weeklyLeaderboard: game?.weeklyLeaderboard ?? true,
     monthlyLeaderboard: game?.monthlyLeaderboard ?? true,
-    reward: game?.reward || 'points_100',
+    // reward: game?.reward || 'points_100', - remove this line
     gameType: (game?.gameType as "books" | "authors" | "years") || 'books',
     feltrinelliGameId: game?.feltrinelliGameId || '00000000-0000-0000-0000-000000000001',
     difficulty: game?.difficulty || 1,
@@ -112,7 +112,7 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
         questionCount: game?.questionCount || 10,
         weeklyLeaderboard: game?.weeklyLeaderboard ?? true,
         monthlyLeaderboard: game?.monthlyLeaderboard ?? true,
-        reward: game?.reward || 'points_100',
+        // reward: game?.reward || 'points_100',
         gameType: (game?.gameType as "books" | "authors" | "years") || 'books',
         feltrinelliGameId: game?.feltrinelliGameId || '00000000-0000-0000-0000-000000000001',
         difficulty: game?.difficulty || 1,
@@ -257,6 +257,34 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
       });
     },
   });
+
+  // Delete game mutation
+const deleteGameMutation = useMutation({
+  mutationFn: async (gameId: number) => {
+    return await apiRequest('DELETE', `/api/feltrinelli/games/${gameId}`, {});
+  },
+  onSuccess: () => {
+    toast({
+      title: "Gioco eliminato",
+      description: "Il gioco è stato eliminato con successo.",
+    });
+    
+    // Invalidate queries
+    queryClient.invalidateQueries({ queryKey: ['/api/games'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/feltrinelli/games'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+    
+    onClose();
+  },
+  onError: (error) => {
+    toast({
+      title: "Errore",
+      description: `Non è stato possibile eliminare il gioco: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`,
+      variant: "destructive",
+    });
+  },
+});
+
 
   // Form submission
   const onSubmit = (data: FormValues) => {
@@ -506,29 +534,6 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="reward"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Premio</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleziona un premio" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="points_100">100 Punti</SelectItem>
-                      <SelectItem value="points_200">200 Punti</SelectItem>
-                      <SelectItem value="points_500">500 Punti</SelectItem>
-                      <SelectItem value="premium_1day">Premium per 1 giorno</SelectItem>
-                      <SelectItem value="premium_1week">Premium per 1 settimana</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}
@@ -598,20 +603,35 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
             </div>
 
             <DialogFooter className="border-t pt-4 mt-2">
+              {isEditing && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    if (window.confirm("Sei sicuro di voler eliminare questo gioco? Questa azione non può essere annullata.")) {
+                      deleteGameMutation.mutate(game?.id as number);
+                    }
+                  }}
+                  className="mr-auto border-gray-300 hover:bg-red-50 text-red-500"
+                >
+                  <i className="fas fa-trash mr-2"></i>
+                  Elimina
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
                 onClick={onClose}
                 className="border-gray-300"
-                disabled={saveMutation.isPending}
+                disabled={saveMutation.isPending || deleteGameMutation.isPending}
               >
                 <i className="fas fa-times mr-2"></i>
                 Annulla
               </Button>
               <Button 
-                type="button" // Cambiato da "submit" a "button" per debug
+                type="button"
                 className="bg-blue-600 hover:bg-blue-700"
-                disabled={saveMutation.isPending}
+                disabled={saveMutation.isPending || deleteGameMutation.isPending}
                 onClick={() => {
                   console.log('Manual submit button clicked');
                   const values = form.getValues();
@@ -638,3 +658,4 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
     </Dialog>
   );
 }
+
