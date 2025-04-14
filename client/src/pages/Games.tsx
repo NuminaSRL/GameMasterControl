@@ -7,10 +7,13 @@ import EditGameModal from "@/components/games/EditGameModal";
 import { Stats, Game } from '../shared/schema';
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import GameRewardsModal from "@/components/games/GameRewardsModal";
 
 export default function Games() {
   const { toast } = useToast();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isRewardsModalOpen, setIsRewardsModalOpen] = useState(false);
   const [currentGame, setCurrentGame] = useState<Game | null>(null);
 
   // Fetch games
@@ -83,6 +86,12 @@ export default function Games() {
     setCurrentGame(null);
   };
 
+  // Funzione per aprire la modale di associazione premi
+  const handleManageRewards = (game: Game) => {
+    setCurrentGame(game);
+    setIsRewardsModalOpen(true);
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -115,6 +124,7 @@ export default function Games() {
               games={games} 
               onEdit={handleEditGame} 
               onToggle={handleToggleGameStatus}
+              onManageRewards={handleManageRewards}
             />
           )}
         </CardContent>
@@ -124,6 +134,16 @@ export default function Games() {
         isOpen={isModalOpen} 
         onClose={handleCloseModal} 
         game={currentGame} 
+      />
+      
+      
+      <GameRewardsModal
+        isOpen={isRewardsModalOpen}
+        onClose={() => {
+          setIsRewardsModalOpen(false);
+          setCurrentGame(null);
+        }}
+        game={currentGame}
       />
     </div>
   );

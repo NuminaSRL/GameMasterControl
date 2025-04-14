@@ -1,10 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Configurazione Supabase
+// Ottieni le variabili d'ambiente
 const supabaseUrl = process.env.SUPABASE_URL || 'https://hdguwqhxbqssdtqgilmy.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'tua-chiave-api-qui';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkZ3V3cWh4YnFzc2R0cWdpbG15Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NDAwNzYxMSwiZXhwIjoyMDU5NTgzNjExfQ.JMMjfy1Vwj4QG_VBSUqlortWzQgcDn-Qod8gEy-l6rQ';
 
-console.log('[Supabase] Inizializzazione client...');
+// Log per debug
+console.log('[Supabase] Initializing with URL:', supabaseUrl);
+console.log('[Supabase] Service role key present:', !!supabaseKey);
 
 // Crea il client Supabase
 export const supabase = createClient(supabaseUrl, supabaseKey, {
@@ -14,51 +16,42 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
   }
 });
 
-// Funzione per verificare la connessione
-export async function checkSupabaseConnection() {
-  try {
-    const { data, error } = await supabase.from('flt_games').select('count').limit(1);
-    
-    if (error) {
-      console.error('[Supabase] Errore di connessione:', error.message);
-      return false;
-    }
-    
-    console.log('[Supabase] Connessione verificata con successo');
-    return true;
-  } catch (err) {
-    console.error('[Supabase] Eccezione durante la connessione:', err);
-    return false;
-  }
-}
-
-// Funzione di utilità per formattare le date
-export function formatDates<T>(obj: T): T {
-  if (!obj || typeof obj !== 'object') return obj;
+// Funzione per formattare le date nei risultati
+export function formatDates(obj: any): any {
+  if (!obj) return obj;
   
   const result = { ...obj };
   
+  // Converti le stringhe di date in oggetti Date
   for (const key in result) {
-    const value = result[key];
-    
-    if (value && typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
-      // Converte le stringhe di date ISO in oggetti Date
-      (result as any)[key] = new Date(value);
-    } else if (value && typeof value === 'object') {
-      // Ricorsivamente formatta le date negli oggetti annidati
-      (result as any)[key] = formatDates(value);
+    if (typeof result[key] === 'string' && 
+        (key.endsWith('_at') || key.endsWith('At')) && 
+        /^\d{4}-\d{2}-\d{2}/.test(result[key])) {
+      result[key] = new Date(result[key]);
     }
   }
   
   return result;
 }
 
-// Funzione di utilità per eseguire query con retry
-export async function safeSupabaseQuery<T>(queryFn: () => Promise<{data: T | null, error: any}>) {
+// Verifica la connessione a Supabase
+export async function testSupabaseConnection() {
   try {
-    return await queryFn();
-  } catch (error) {
-    console.error("[Supabase] Errore nella query:", error);
-    return { data: null, error: { message: "Query fallita: " + (error instanceof Error ? error.message : String(error)) } };
+    console.log('[Supabase] Testing connection...');
+    const { data, error } = await supabase.from('clients').select('count(*)', { count: 'exact', head: true });
+    
+    if (error) {
+      console.error('[Supabase] Connection test failed:', error);
+      return false;
+    }
+    
+    console.log('[Supabase] Connection successful! Clients count:', data);
+    return true;
+  } catch (err) {
+    console.error('[Supabase] Connection test error:', err);
+    return false;
   }
 }
+
+// Esegui il test di connessione all'avvio
+testSupabaseConnection();

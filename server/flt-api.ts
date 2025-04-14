@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { supabase, safeSupabaseQuery } from "./supabase";
+import { supabase } from "./supabase";
 import { z } from "zod";
 import crypto from "crypto"; // Aggiungiamo l'import di crypto
 

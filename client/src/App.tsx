@@ -1,4 +1,5 @@
-import { Switch, Route } from "wouter";
+import * as React from 'react';
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -11,8 +12,17 @@ import FeltrinelliApiTest from "@/pages/FeltrinelliApiTest";
 import FeltrinelliMapping from "@/pages/FeltrinelliMapping";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
+import Login from "@/pages/Login";
+import Register from "@/pages/Register";
+import Unauthorized from "@/pages/Unauthorized";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
-function AppContent() {
+// Add import
+import LoadingScreen from "@/components/ui/LoadingScreen";
+
+// Protected app content with layout
+function ProtectedAppContent() {
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
@@ -34,11 +44,48 @@ function AppContent() {
   );
 }
 
+// Componente per reindirizzare alla pagina di login
+function RedirectToLogin() {
+  const [, setLocation] = useLocation();
+  React.useEffect(() => {
+    setLocation("/login");
+  }, [setLocation]);
+  return null;
+}
+
+function AppContent() {
+  const { isLoading } = useAuth();
+
+  // Show loading screen while authentication is being checked
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
+  return (
+    <Switch>
+      <Route path="/login" component={Login} />
+      <Route path="/register" component={Register} />
+      <Route path="/unauthorized" component={Unauthorized} />
+      <Route path="/">
+        {/* Reindirizza a login per default */}
+        <RedirectToLogin />
+      </Route>
+      <Route path="/:rest*">
+        <ProtectedRoute>
+          <ProtectedAppContent />
+        </ProtectedRoute>
+      </Route>
+    </Switch>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppContent />
-      <Toaster />
+      <AuthProvider>
+        <AppContent />
+        <Toaster />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

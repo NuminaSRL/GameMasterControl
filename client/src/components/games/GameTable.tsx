@@ -5,6 +5,8 @@ interface GameTableProps {
   games: Game[];
   onEdit: (game: Game) => void;
   onToggle: (gameId: number) => void;
+  // We need to add a new prop for managing rewards
+  onManageRewards?: (game: Game) => void;
 }
 
 // Aggiungi una funzione per convertire il livello di difficoltà in testo
@@ -27,7 +29,7 @@ const getDifficultyColor = (difficulty: number) => {
   }
 };
 
-export default function GameTable({ games, onEdit, onToggle }: GameTableProps) {
+export default function GameTable({ games, onEdit, onToggle, onManageRewards }: GameTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
@@ -96,6 +98,16 @@ export default function GameTable({ games, onEdit, onToggle }: GameTableProps) {
                 {!game.weeklyLeaderboard && !game.monthlyLeaderboard ? 'Nessuna' : ''}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                {/* Aggiungi il pulsante per gestire i premi */}
+                {onManageRewards && (
+                  <button
+                    onClick={() => onManageRewards(game)}
+                    className="text-yellow-500 hover:text-yellow-700 mr-3"
+                    title="Gestisci premi"
+                  >
+                    <i className="fas fa-trophy"></i>
+                  </button>
+                )}
                 <button
                   onClick={() => onEdit(game)}
                   className="text-blue-600 hover:text-blue-900 mr-3"

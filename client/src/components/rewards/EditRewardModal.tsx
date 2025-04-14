@@ -17,9 +17,19 @@ interface EditRewardModalProps {
   reward: Reward | null;
 }
 
+import { useQuery } from "@tanstack/react-query";
+import { Game } from "@/shared/schema";
+import { Checkbox } from "@/components/ui/checkbox";
+
 export default function EditRewardModal({ isOpen, onClose, reward }: EditRewardModalProps) {
   const { toast } = useToast();
   const isNewReward = !reward;
+  
+  // Fetch games for association
+  const { data: games = [] } = useQuery<Game[]>({
+    queryKey: ['/api/feltrinelli/games'],
+    enabled: isOpen,
+  });
   
   // Form state
   const [formData, setFormData] = useState({
@@ -40,6 +50,34 @@ export default function EditRewardModal({ isOpen, onClose, reward }: EditRewardM
   // Reset form when reward changes
   useEffect(() => {
     if (reward) {
+      // Fetch existing associations if editing a reward
+      if (reward.id) {
+        apiRequest('GET', `/api/feltrinelli/rewards/${reward.id}/games`, {})
+          .then((data) => {
+            // Transform the data into our format
+            const associations = data.reduce((acc: any[], game: any) => {
+              const existingAssoc = acc.find(a => a.gameId === game.id);
+              if (existingAssoc) {
+                existingAssoc.leaderboardTypes.push(game.leaderboardType);
+              } else {
+                acc.push({
+                  gameId: game.id,
+                  leaderboardTypes: [game.leaderboardType]
+                });
+              }
+              return acc;
+            }, []);
+            
+            setFormData(prev => ({
+              ...prev,
+              gameAssociations: associations
+            }));
+          })
+          .catch(err => {
+            console.error("Error fetching game associations:", err);
+          });
+      }
+      
       setFormData({
         name: reward.name,
         description: reward.description,
@@ -251,7 +289,7 @@ export default function EditRewardModal({ isOpen, onClose, reward }: EditRewardM
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] bg-white">
+      <DialogContent className="sm:max-w-[600px] bg-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">{isNewReward ? 'Crea Nuovo Premio' : 'Modifica Premio'}</DialogTitle>
         </DialogHeader>

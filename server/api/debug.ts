@@ -1,8 +1,12 @@
-import express from 'express';
+import express, { Express } from 'express'; // Update this line to import Express type
 import path from 'path';
 import fs from 'fs';
+import { storage } from '../storage'; // Add this import for storage
+import { SupabaseStorage } from '../supabase-storage'; // Add this import for SupabaseStorage
 
-export function configureDebugRoutes(app: any) {
+// Aggiungi questo nuovo endpoint nella funzione configureDebugRoutes
+
+export function configureDebugRoutes(app: Express) {
   app.get('/api/debug-upload-path', function(req: any, res: any) {
     const uploadDir = path.join(process.cwd(), 'public/uploads');
     const uploadDirAbsolute = path.resolve(uploadDir);
@@ -46,5 +50,19 @@ export function configureDebugRoutes(app: any) {
     });
   });
   
-  console.log('[Server] Route di debug configurata');
+  // Endpoint per verificare il tipo di storage in uso
+  app.get('/api/debug/storage-info', (req, res) => {
+    try {
+      const storageInfo = {
+        type: storage.constructor.name,
+        isSupabase: storage instanceof SupabaseStorage,
+        environment: process.env.NODE_ENV || 'development',
+        supabaseUrl: process.env.SUPABASE_URL ? 'Present' : 'Missing'
+      };
+      res.json(storageInfo);
+    } catch (error) {
+      res.status(500).json({ error: 'Error getting storage info', message: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
 }
+console.log('[Server] Route di debug configurata');

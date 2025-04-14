@@ -1,13 +1,14 @@
 import { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "../storage.js";
+import { storage } from "../storage"; 
+import { db } from '../db';
 import { insertGameSchema, insertBadgeSchema, insertRewardSchema, insertGameBadgeSchema } from "../validators";
 import * as feltrinelliApi from "../feltrinelli-api";
 import { GAME_IDS } from "../feltrinelli-api";
 import * as fltApi from "../flt-api";
 import * as fltSimpleApi from "../flt-simple-api";
 import * as userProfileApi from "../user-profile-api";
-import { supabase, safeSupabaseQuery } from '../supabase';
+import { supabase } from "../supabase";
 import crypto from 'crypto';
 import feltrinelliRouter from '../clients/feltrinelli/routes/feltrinelli-routes';
 import { fileURLToPath } from 'url';
@@ -16,7 +17,10 @@ import path from 'path';
 import fs from 'fs';
 import { configureUploadRoute } from '../api/upload';
 import { configureDebugRoutes } from '../api/debug';
-
+import { AuthService } from '../services/authService';
+import { AuthController } from '../controllers/authController';
+import { authMiddleware, roleMiddleware, clientMiddleware } from '../middleware/auth';
+import clientsRouter from './clients';
 
 
 // Aggiungi questo codice per definire __dirname in un modulo ES
@@ -43,6 +47,104 @@ console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'Presente' : 'Assente');
 export async function registerRoutes(app: Express): Promise<Server> {
   // Create HTTP server
   const httpServer = createServer(app);
+  // Inizializza il servizio di autenticazione
+  const authService = new AuthService(storage);
+  // Passa storage come secondo parametro al costruttore di AuthController
+  const authController = new AuthController(authService, storage);
+
+
+// Ottieni tutti i client (accessibile pubblicamente per la registrazione)
+app.get('/api/clients/public', async (req, res) => {
+  try {
+    console.log('[Clients] Fetching all clients for public endpoint');
+    
+    // Aggiungi log per capire il tipo di storage utilizzato
+    console.log('[Clients] Storage type:', storage.constructor.name);
+    
+    // Chiamata diretta a Supabase per diagnostica
+    const { data, error } = await supabase
+      .from('clients')
+      .select('*');
+    
+    console.log('[Clients] Direct Supabase query result:', data || []);
+    if (error) console.error('[Clients] Direct Supabase query error:', error);
+    
+    const clients = await storage.getAllClients();
+    console.log('[Clients] Retrieved clients:', clients);
+    
+    // Restituisci solo id e nome per motivi di sicurezza
+    const safeClients = clients.map(client => ({
+      id: client.id,
+      name: client.name
+    }));
+    console.log('[Clients] Returning safe clients:', safeClients);
+    
+    // Se non ci sono client da Supabase ma ci sono dalla query diretta, usa quelli
+    if (safeClients.length === 0 && data && data.length > 0) {
+      const safeSuapabaseClients = data.map(client => ({
+        id: client.id,
+        name: client.name
+      }));
+      console.log('[Clients] Fallback to direct Supabase clients:', safeSuapabaseClients);
+      return res.json(safeSuapabaseClients);
+    }
+    
+    res.json(safeClients);
+  } catch (error) {
+    console.error('[Clients] Error fetching clients:', error);
+    res.status(500).json({ message: `Error fetching clients: ${error instanceof Error ? error.message : 'Unknown error'}` });
+  }
+});
+  // === AUTH ENDPOINTS ===
+  
+  // Registrazione utente
+  app.post('/api/auth/register', async (req, res) => {
+    await authController.register(req, res);
+  });
+  
+  // Login utente
+  app.post('/api/auth/login', async (req, res) => {
+    await authController.login(req, res);
+  });
+  
+  // Profilo utente (richiede autenticazione)
+  app.get('/api/auth/profile', authMiddleware(authService), async (req, res) => {
+    await authController.getProfile(req, res);
+  });
+  
+  // === CLIENT ENDPOINTS ===
+  
+  // Ottieni tutti i client (solo admin)
+  app.get('/api/clients', authMiddleware(authService), roleMiddleware(['admin']), async (req, res) => {
+    try {
+      const clients = await storage.getAllClients();
+      res.json(clients);
+    } catch (error) {
+      res.status(500).json({ message: `Error fetching clients: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+  
+  // Crea un nuovo client (solo admin)
+  app.post('/api/clients', authMiddleware(authService), roleMiddleware(['admin']), async (req, res) => {
+    try {
+      const { name, logo_url } = req.body;
+      
+      if (!name) {
+        return res.status(400).json({ error: 'Client name is required' });
+      }
+      
+      // Crea il nuovo client
+      const result = await db.execute(`
+        INSERT INTO clients (name, logo_url, created_at, updated_at)
+        VALUES ($1, $2, NOW(), NOW())
+        RETURNING id, name, logo_url, created_at, updated_at
+      `, [name, logo_url || null]);
+      
+      res.status(201).json(result.rows[0]);
+    } catch (error) {
+      res.status(500).json({ message: `Error creating client: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
 
   // Controllo delle directory per ambiente di produzione
   if (process.env.NODE_ENV === 'production') {
@@ -72,8 +174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // === FELTRINELLI API INTEGRATION - NUOVA VERSIONE ===
 
-    // Registra le route di Feltrinelli con il nuovo percorso
-    app.use('/api/clients/feltrinelli', feltrinelliRouter);
+  app.use('/api/clients', clientsRouter);
   
     // Mantieni anche il vecchio percorso per retrocompatibilità
     app.use('/api/feltrinelli', feltrinelliRouter);
@@ -109,6 +210,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
   } catch (error) {
     console.error('[Routes] Error registering Feltrinelli routes:', error);
   }
+
+    // === CLIENT AUTHENTICATION ENDPOINTS ===
+  
+  // Client login
+  app.post('/api/clients/login', async (req, res) => {
+    try {
+      const { api_key } = req.body;
+      
+      if (!api_key) {
+        return res.status(400).json({ error: 'API key is required' });
+      }
+      
+      // Verifica l'API key
+      const result = await db.execute(`
+        SELECT id, name, logo_url
+        FROM clients
+        WHERE api_key = $1
+      `, [api_key]);
+      
+      if (result.rows.length === 0) {
+        return res.status(401).json({ error: 'Invalid API key' });
+      }
+      
+      const client = result.rows[0];
+      
+      // Genera un token JWT per l'autenticazione
+      const token = crypto.randomBytes(64).toString('hex');
+      
+      // Memorizza il token (in un database reale dovresti salvarlo)
+      await db.execute(`
+        UPDATE clients
+        SET token = $1, updated_at = NOW()
+        WHERE id = $2
+      `, [token, client.id]);
+      
+      res.json({
+        success: true,
+        client: {
+          id: client.id,
+          name: client.name,
+          logo_url: client.logo_url
+        },
+        token
+      });
+    } catch (error) {
+      console.error('[API] Error during client login:', error);
+      res.status(500).json({ error: 'Error during client login' });
+    }
+  });
+  
+  // Client registration (solo per admin)
+  app.post('/api/clients', async (req, res) => {
+    try {
+      const { name, logo_url } = req.body;
+      
+      if (!name) {
+        return res.status(400).json({ error: 'Client name is required' });
+      }
+      
+      // Genera una API key unica
+      const api_key = crypto.randomBytes(32).toString('hex');
+      
+      // Crea il nuovo client
+      const result = await db.execute(`
+        INSERT INTO clients (name, api_key, logo_url)
+        VALUES ($1, $2, $3)
+        RETURNING id, name, api_key, logo_url
+      `, [name, api_key, logo_url || null]);
+      
+      res.status(201).json(result.rows[0]);
+    } catch (error) {
+      console.error('[API] Error creating client:', error);
+      res.status(500).json({ error: 'Error creating client' });
+    }
+  });
 
   // Sessione di gioco - sia con /api/games/session che con /api/feltrinelli/session
   app.post('/api/games/session', async (req, res) => {
@@ -472,8 +648,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const reward of feltrinelliRewards) {
         try {
           // Verifica se esiste già un premio con questo ID Feltrinelli
-          const existingRewards = await storage.getAllRewards();
-          const existingReward = existingRewards.find(r => r.feltrinelliRewardId === reward.id);
+          const existingRewardsResult = await storage.getAllRewards();
+          const existingRewards = existingRewardsResult || [];
+          
+          // Convertiamo gli ID in stringhe e gestiamo correttamente il confronto
+          const existingReward = existingRewards.find(r => {
+            // Gestione sicura per feltrinelliRewardId che potrebbe essere null/undefined
+            if (!r.feltrinelliRewardId) return false;
+            
+            // Confronto come stringhe per evitare problemi di tipo
+            return r.feltrinelliRewardId.toString() === reward.id.toString();
+          });
           
           const rewardData = {
             name: reward.name,
@@ -486,7 +671,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             color: reward.rank === 1 ? '#FFD700' : reward.rank === 2 ? '#C0C0C0' : reward.rank === 3 ? '#CD7F32' : '#3B82F6',
             available: 1,
             gameType: gameType,
-            feltrinelliRewardId: reward.id,
+            // Salviamo l'ID come stringa per evitare problemi di tipo
+            feltrinelliRewardId: reward.id.toString(),
             originalImageUrl: reward.image_url,
             isImported: true,
             syncedAt: new Date()
@@ -499,7 +685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             syncResults.details.push({ id: existingReward.id, name: reward.name, action: 'updated' });
           } else {
             // Crea un nuovo premio
-            const newReward = await storage.createReward(rewardData as any);
+            const newReward = await storage.createReward(rewardData);
             syncResults.added++;
             syncResults.details.push({ id: newReward.id, name: reward.name, action: 'added' });
           }
@@ -513,6 +699,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // Invia la risposta con i risultati della sincronizzazione
       res.json({
         success: true,
         results: syncResults
@@ -661,20 +848,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // === REWARDS ENDPOINTS ===
   
-  // Get all rewards
+  // Get all rewards (filtrati per client_id)
   app.get('/api/rewards', async (req, res) => {
     try {
-      const rewards = await storage.getAllRewards();
+      const clientId = req.query.clientId ? parseInt(req.query.clientId as string) : null;
+      
+      let rewards;
+      if (clientId) {
+        // Filtra per client_id
+        rewards = await storage.getRewardsByClient(clientId);
+      } else {
+        // Ottieni tutti i premi (solo per admin)
+        rewards = await storage.getAllRewards();
+      }
+      
       res.json(rewards);
     } catch (error) {
       res.status(500).json({ message: `Error fetching rewards: ${error instanceof Error ? error.message : 'Unknown error'}` });
     }
   });
   
-  // Create a new reward
+  // Create a new reward (con client_id)
   app.post('/api/rewards', async (req, res) => {
     try {
-      const validatedData = insertRewardSchema.parse(req.body);
+      const validatedData = insertRewardSchema.parse({
+        ...req.body,
+        client_id: req.body.clientId || null
+      });
+      
       const newReward = await storage.createReward(validatedData);
       res.status(201).json(newReward);
     } catch (error) {
@@ -726,6 +927,323 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: `Error deleting reward: ${error instanceof Error ? error.message : 'Unknown error'}` });
+    }
+  });
+
+    // === REWARD GAMES ENDPOINTS ===
+  
+   // Get all games associated with a reward
+   app.get('/api/rewards/:rewardId/games', async (req, res) => {
+    try {
+      const rewardId = parseInt(req.params.rewardId);
+      
+      // Modifica la query per gestire correttamente i tipi di dati
+      const result = await db.execute(`
+        SELECT g.id, g.name, g.description, g.is_active, 
+               g.timer_duration, g.question_count, g.weekly_leaderboard,
+               g.monthly_leaderboard, g.reward, g.game_type,
+               g.feltrinelli_game_id, g.difficulty, g.created_at,
+               rg.leaderboard_type as "leaderboardType"
+        FROM games g
+        JOIN reward_games rg ON g.id = rg.game_id
+        WHERE rg.reward_id = $1
+        ORDER BY g.name
+      `, [rewardId]);
+      
+      res.json(result.rows);
+    } catch (error) {
+      console.error('[API] Error fetching games for reward:', error);
+      res.status(500).json({ error: 'Error fetching games for reward' });
+    }
+  });
+  
+  // Get all rewards for a game
+  app.get('/api/games/:gameId/rewards', async (req, res) => {
+    try {
+      const gameId = parseInt(req.params.gameId);
+      const clientId = req.query.clientId ? parseInt(req.query.clientId as string) : null;
+      
+      // Modifica la query per includere il client_id
+      const result = await db.execute(`
+        SELECT r.*, gr.leaderboard_type as "leaderboardType"
+        FROM rewards r
+        JOIN game_rewards gr ON r.id = gr.reward_id
+        WHERE gr.game_id = $1
+        ${clientId ? 'AND r.client_id = $2' : ''}
+        ORDER BY r.name
+      `, clientId ? [gameId, clientId] : [gameId]);
+      
+      res.json(result.rows);
+    } catch (error) {
+      console.error('[API] Error fetching rewards for game:', error);
+      res.status(500).json({ error: 'Error fetching rewards for game' });
+    }
+  });
+  
+  // Associate a reward with a game
+  app.post('/api/games/:gameId/rewards/:rewardId', async (req, res) => {
+    try {
+      const gameId = parseInt(req.params.gameId);
+      const rewardId = parseInt(req.params.rewardId);
+      const { leaderboardType = 'weekly' } = req.body;
+      
+      // Verifica che il game esista
+      const game = await storage.getGame(gameId);
+      if (!game) {
+        return res.status(404).json({ error: 'Game not found' });
+      }
+      
+      // Verifica che il reward esista
+      const reward = await storage.getReward(rewardId);
+      if (!reward) {
+        return res.status(404).json({ error: 'Reward not found' });
+      }
+      
+      // Crea l'associazione
+      const result = await db.execute(`
+        INSERT INTO game_rewards (game_id, reward_id, leaderboard_type)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (game_id, reward_id) 
+        DO UPDATE SET leaderboard_type = $3
+        RETURNING *
+      `, [gameId, rewardId, leaderboardType]);
+      
+      res.status(201).json(result.rows[0]);
+    } catch (error) {
+      console.error('[API] Error associating reward with game:', error);
+      res.status(500).json({ error: 'Error associating reward with game' });
+    }
+  });
+  
+  // Remove a reward from a game
+  app.delete('/api/games/:gameId/rewards/:rewardId', async (req, res) => {
+    try {
+      const gameId = parseInt(req.params.gameId);
+      const rewardId = parseInt(req.params.rewardId);
+      
+      await db.execute(`
+        DELETE FROM game_rewards 
+        WHERE game_id = $1 AND reward_id = $2
+      `, [gameId, rewardId]);
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error('[API] Error removing reward from game:', error);
+      res.status(500).json({ error: 'Error removing reward from game' });
+    }
+  });
+
+  // Associate a game with a reward
+  app.post('/api/rewards/:rewardId/games/:gameId', async (req, res) => {
+    try {
+      const rewardId = parseInt(req.params.rewardId);
+      const gameId = parseInt(req.params.gameId);
+      const { leaderboardType = 'weekly' } = req.body;
+      
+      // Verifica che il reward esista
+      const reward = await storage.getReward(rewardId);
+      if (!reward) {
+        return res.status(404).json({ error: 'Reward not found' });
+      }
+      
+      // Verifica che il game esista
+      const game = await storage.getGame(gameId);
+      if (!game) {
+        return res.status(404).json({ error: 'Game not found' });
+      }
+      
+      // Crea l'associazione - assicurati che tutti i parametri siano del tipo corretto
+      const result = await db.execute(`
+        INSERT INTO reward_games (reward_id, game_id, leaderboard_type)
+        VALUES ($1::integer, $2::integer, $3::text)
+        ON CONFLICT (reward_id, game_id) 
+        DO UPDATE SET leaderboard_type = $3::text
+        RETURNING *
+      `, [rewardId, gameId, leaderboardType]);
+      
+      res.status(201).json(result.rows[0]);
+    } catch (error) {
+      console.error('[API] Error associating game with reward:', error);
+      res.status(500).json({ error: 'Error associating game with reward' });
+    }
+  });
+  
+  // Remove a game from a reward
+  app.delete('/api/rewards/:rewardId/games/:gameId', async (req, res) => {
+    try {
+      const rewardId = parseInt(req.params.rewardId);
+      const gameId = parseInt(req.params.gameId);
+      
+      // Assicurati che entrambi i parametri siano passati e del tipo corretto
+      await db.execute(`
+        DELETE FROM reward_games 
+        WHERE reward_id = $1::integer AND game_id = $2::integer
+      `, [rewardId, gameId]);
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error('[API] Error removing game from reward:', error);
+      res.status(500).json({ error: 'Error removing game from reward' });
+    }
+  });
+  
+
+
+      // Ottieni tutti i rewards di un gioco
+      app.get('/api/feltrinelli/games/:gameId/rewards', async (req, res) => {
+        try {
+          const gameId = req.params.gameId;
+          
+          if (!gameId) {
+            return res.status(400).json({ message: 'gameId is required' });
+          }
+          
+          console.log(`[DEBUG] Fetching rewards for game ID: ${gameId}`);
+          
+          // Recupera le associazioni gioco-premio dalla tabella di relazione
+          const { data: gameRewardRelations, error: relationsError } = await supabase
+            .from('flt_game_rewards')
+            .select('reward_id')
+            .eq('game_id', gameId);
+            
+          if (relationsError) {
+            console.error('Error fetching game-reward relations:', relationsError);
+            return res.status(500).json({ error: 'Error fetching game-reward relations' });
+          }
+          
+          console.log(`[DEBUG] Found ${gameRewardRelations?.length || 0} reward relations for game ID ${gameId}`);
+          
+          if (!gameRewardRelations || gameRewardRelations.length === 0) {
+            // Nessun premio associato a questo gioco
+            return res.json([]);
+          }
+          
+          // Estrai gli ID dei premi
+          const rewardIds = gameRewardRelations.map(relation => relation.reward_id);
+          
+          // Recupera i dettagli dei premi
+          const { data: rewards, error: rewardsError } = await supabase
+            .from('flt_rewards')
+            .select('*')
+            .in('id', rewardIds);
+            
+          if (rewardsError) {
+            console.error('Error fetching rewards:', rewardsError);
+            return res.status(500).json({ error: 'Error fetching rewards' });
+          }
+          
+          console.log(`[DEBUG] Found ${rewards?.length || 0} rewards for game ID ${gameId}`);
+          
+          // Formatta i risultati
+          const formattedRewards = rewards?.map(reward => ({
+            id: reward.id,
+            name: reward.name || 'Unnamed Reward',
+            description: reward.description || '',
+            type: reward.type || 'feltrinelli',
+            value: reward.value || '',
+            rank: reward.rank || 0,
+            pointsRequired: reward.points_required || 0,
+            icon: reward.icon || 'award',
+            color: reward.color || '#3B82F6',
+            available: reward.available || 1,
+            gameId: gameId, // Associamo il gameId qui
+            feltrinelliRewardId: reward.id,
+            originalImageUrl: reward.image_url || '',
+            isImported: true,
+            syncedAt: reward.updated_at || reward.created_at || new Date(),
+            startDate: reward.start_date,
+            endDate: reward.end_date,
+            isActive: reward.is_active
+          })) || [];
+          
+          res.json(formattedRewards);
+        } catch (error) {
+          console.error('[API] Error fetching rewards for game:', error);
+          res.status(500).json({ error: 'Error fetching rewards for game' });
+        }
+      });
+          
+     
+
+        // Associa un premio a un gioco
+  app.post('/api/feltrinelli/games/:gameId/rewards/:rewardId', async (req, res) => {
+    try {
+      const { gameId, rewardId } = req.params;
+      
+      if (!gameId || !rewardId) {
+        return res.status(400).json({ message: 'gameId and rewardId are required' });
+      }
+      
+      // Verifica che il gioco esista
+      const { data: game, error: gameError } = await supabase
+        .from('flt_games')
+        .select('id')
+        .eq('id', gameId)
+        .single();
+        
+      if (gameError || !game) {
+        return res.status(404).json({ error: 'Game not found' });
+      }
+      
+      // Verifica che il premio esista
+      const { data: reward, error: rewardError } = await supabase
+        .from('flt_rewards')
+        .select('id')
+        .eq('id', rewardId)
+        .single();
+        
+      if (rewardError || !reward) {
+        return res.status(404).json({ error: 'Reward not found' });
+      }
+      
+      // Crea l'associazione
+      const { data, error } = await supabase
+        .from('flt_game_rewards')
+        .insert({
+          game_id: gameId,
+          reward_id: rewardId
+        })
+        .select();
+        
+      if (error) {
+        // Se l'errore è dovuto a un vincolo di unicità, significa che l'associazione esiste già
+        if (error.code === '23505') {
+          return res.status(409).json({ message: 'This reward is already associated with this game' });
+        }
+        throw error;
+      }
+      
+      res.status(201).json({ success: true, data });
+    } catch (error) {
+      console.error('[API] Error associating reward with game:', error);
+      res.status(500).json({ error: 'Error associating reward with game' });
+    }
+  });
+  
+  // Rimuovi un premio da un gioco
+  app.delete('/api/feltrinelli/games/:gameId/rewards/:rewardId', async (req, res) => {
+    try {
+      const { gameId, rewardId } = req.params;
+      
+      if (!gameId || !rewardId) {
+        return res.status(400).json({ message: 'gameId and rewardId are required' });
+      }
+      
+      // Rimuovi l'associazione
+      const { error } = await supabase
+        .from('flt_game_rewards')
+        .delete()
+        .eq('game_id', gameId)
+        .eq('reward_id', rewardId);
+        
+      if (error) {
+        throw error;
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error('[API] Error removing reward from game:', error);
+      res.status(500).json({ error: 'Error removing reward from game' });
     }
   });
   

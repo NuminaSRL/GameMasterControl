@@ -39,7 +39,9 @@ export class StorageProviderManager {
     return this.provider;
   }
 
+  // Assicurati che questa funzione restituisca sempre true
   static useSupabase(): boolean {
+    console.log('[StorageProvider] Chiamata a useSupabase()', true);
     return true; // Sempre true perché usiamo solo Supabase
   }
 }

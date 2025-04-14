@@ -38,7 +38,8 @@ export async function initSupabaseTables() {
 
 // Verifica se le tabelle esistono già
 async function checkExistingTables() {
-  const requiredTables = ['users', 'games', 'badges', 'flt_game_badges', 'rewards', 'stats'];
+  // Aggiungiamo 'clients' alla lista delle tabelle richieste
+  const requiredTables = ['users', 'games', 'badges', 'flt_game_badges', 'rewards', 'stats', 'clients'];
   const results = [];
   
   for (const table of requiredTables) {
@@ -117,6 +118,180 @@ async function createTablesManually() {
  */
 export class SupabaseStorage implements IStorage {
   // === User operations ===
+
+  async getUserByEmail(email: string): Promise<any> {
+    console.log(`[SupabaseStorage] Getting user by email ${email}`);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', email)
+        .single();
+        
+      if (error) {
+        console.error('[SupabaseStorage] Error getting user by email:', error);
+        return null;
+      }
+      
+      console.log('[SupabaseStorage] User found by email:', data);
+      return data;
+    } catch (error) {
+      console.error('[SupabaseStorage] Error getting user by email:', error);
+      return null;
+    }
+  }
+  
+  async getRewardsByClient(clientId: number): Promise<any[]> {
+    console.log(`[SupabaseStorage] Getting rewards by client ${clientId}`);
+    try {
+      const { data, error } = await supabase
+        .from('rewards')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('name');
+        
+      if (error) {
+        console.error('[SupabaseStorage] Error getting rewards by client:', error);
+        return [];
+      }
+      
+      console.log('[SupabaseStorage] Rewards found by client:', data ? data.length : 0);
+      return data || [];
+    } catch (error) {
+      console.error('[SupabaseStorage] Error getting rewards by client:', error);
+      return [];
+    }
+  }
+
+
+// Nella classe SupabaseStorage, assicurati che ci sia questo metodo
+async getAllClients(): Promise<any[]> {
+  console.log('[SupabaseStorage] Getting all clients - START');
+  try {
+    console.log('[SupabaseStorage] About to query Supabase clients table');
+    console.log('[SupabaseStorage] Supabase URL:', process.env.SUPABASE_URL);
+    
+    // Verifica se la tabella clients esiste
+    const { count, error: countError } = await supabase
+      .from('clients')
+      .select('*', { count: 'exact', head: true });
+    
+    if (countError) {
+      console.error('[SupabaseStorage] Error checking clients table:', countError);
+      // Se la tabella non esiste, potremmo crearla
+      if (countError.code === 'PGRST104') {
+        console.log('[SupabaseStorage] Clients table does not exist, attempting to create it');
+        await this._createClientsTable();
+        return []; // Ritorniamo un array vuoto per questa chiamata
+      }
+      throw countError;
+    }
+    
+    console.log(`[SupabaseStorage] Clients table exists with ${count} records`);
+    
+    // Procedi con la query originale
+    const { data, error } = await supabase
+      .from('clients')
+      .select('id, name, logo_url, created_at, updated_at')
+      .order('name');
+      
+    if (error) {
+      console.error('[SupabaseStorage] Error getting clients:', error);
+      throw error;
+    }
+    
+    console.log('[SupabaseStorage] Clients found:', data ? JSON.stringify(data) : 'null');
+    return data || [];
+  } catch (error) {
+    console.error('[SupabaseStorage] Error getting all clients:', error);
+    return [];
+  } finally {
+    console.log('[SupabaseStorage] Getting all clients - END');
+  }
+}
+
+// Metodo privato per creare la tabella clients se non esiste
+async _createClientsTable(): Promise<void> {
+  try {
+    console.log('[SupabaseStorage] Creating clients table');
+    
+    // Esegui SQL per creare la tabella
+    const { error } = await supabase.rpc('create_clients_table_if_not_exists');
+    
+    if (error) {
+      console.error('[SupabaseStorage] Error creating clients table via RPC:', error);
+      
+      // Fallback: crea la tabella direttamente con SQL
+      const { error: sqlError } = await supabase.rpc('execute_sql', {
+        sql_query: `
+          CREATE TABLE IF NOT EXISTS clients (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            logo_url TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+        `
+      });
+      
+      if (sqlError) {
+        console.error('[SupabaseStorage] Error creating clients table via SQL:', sqlError);
+        throw sqlError;
+      }
+    }
+    
+    console.log('[SupabaseStorage] Clients table created successfully');
+  } catch (error) {
+    console.error('[SupabaseStorage] Failed to create clients table:', error);
+    throw error;
+  }
+}
+
+// Aggiungiamo il metodo getClient
+async getClient(id: number): Promise<any> {
+  console.log(`[SupabaseStorage] Getting client with id ${id}`);
+  try {
+    const { data, error } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('id', id)
+      .single();
+      
+    if (error) {
+      console.error('[SupabaseStorage] Error getting client:', error);
+      return null;
+    }
+    
+    console.log('[SupabaseStorage] Client found:', data);
+    return data;
+  } catch (error) {
+    console.error('[SupabaseStorage] Error getting client:', error);
+    return null;
+  }
+}
+
+// Aggiungiamo il metodo getClientById
+async getClientById(id: number): Promise<any> {
+  console.log(`[SupabaseStorage] Getting client by id ${id}`);
+  try {
+    const { data, error } = await supabase
+      .from('clients')
+      .select('id, name, logo_url, created_at, updated_at')
+      .eq('id', id)
+      .single();
+      
+    if (error) {
+      console.error('[SupabaseStorage] Error getting client by id:', error);
+      return null;
+    }
+    
+    console.log('[SupabaseStorage] Client found by id:', data);
+    return data;
+  } catch (error) {
+    console.error('[SupabaseStorage] Error getting client by id:', error);
+    return null;
+  }
+}
   
   async getUser(id: number): Promise<User | undefined> {
     const { data, error } = await supabase

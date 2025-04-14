@@ -1,0 +1,501 @@
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Game } from "../../shared/schema";
+
+interface GameRewardsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  game: Game | null;
+}
+
+interface Reward {
+  id: number;
+  name: string;
+  description?: string;
+  points: number;
+  isActive: boolean;
+  rank?: number;
+  imageUrl?: string;
+}
+
+interface RewardAssociation {
+  rewardId: number;
+  position: number;
+}
+
+export default function GameRewardsModal({ isOpen, onClose, game }: GameRewardsModalProps) {
+  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState<"global" | "monthly" | "weekly">("global");
+  
+  // Stato per le associazioni con i premi
+  const [rewardAssociations, setRewardAssociations] = useState<{
+    weekly: RewardAssociation[];
+    monthly: RewardAssociation[];
+    global: RewardAssociation[];
+  }>({
+    weekly: [],
+    monthly: [],
+    global: []
+  });
+
+  // Fetch rewards
+  const { data: rewards = [], isLoading: isLoadingRewards } = useQuery<Reward[]>({
+    queryKey: ['/api/feltrinelli/rewards'],
+    enabled: isOpen,
+  });
+
+  // Carica le associazioni esistenti quando si apre la modale
+  useEffect(() => {
+    if (game?.id && isOpen) {
+      // Fetch existing reward associations
+      // Fix: Remove the empty object as second parameter for GET requests
+      apiRequest('GET', `/api/feltrinelli/games/${game.id}/rewards`)
+        .then((data) => {
+          const associations = {
+            weekly: data
+              .filter((r: any) => r.leaderboardType === 'weekly')
+              .map((r: any) => ({ rewardId: r.id, position: r.position || 0 })),
+            monthly: data
+              .filter((r: any) => r.leaderboardType === 'monthly')
+              .map((r: any) => ({ rewardId: r.id, position: r.position || 0 })),
+            global: data
+              .filter((r: any) => r.leaderboardType === 'global')
+              .map((r: any) => ({ rewardId: r.id, position: r.position || 0 }))
+          };
+          
+          setRewardAssociations(associations);
+        })
+        .catch(err => {
+          console.error("Error fetching reward associations:", err);
+          toast({
+            title: "Errore",
+            description: "Impossibile caricare le associazioni dei premi",
+            variant: "destructive",
+          });
+        });
+    } else {
+      // Reset associations for new game
+      setRewardAssociations({
+        weekly: [],
+        monthly: [],
+        global: []
+      });
+    }
+  }, [game, isOpen, toast]);
+
+  // Gestisce la selezione/deselezione di un premio
+  const handleRewardToggle = (reward: Reward, leaderboardType: 'weekly' | 'monthly' | 'global') => {
+    setRewardAssociations(prev => {
+      const newAssociations = { ...prev };
+      const existingIndex = newAssociations[leaderboardType].findIndex(a => a.rewardId === reward.id);
+      
+      if (existingIndex >= 0) {
+        // Rimuovi il premio se già presente
+        newAssociations[leaderboardType] = newAssociations[leaderboardType].filter(a => a.rewardId !== reward.id);
+      } else {
+        // Aggiungi il premio con posizione predefinita (usa rank del premio se disponibile)
+        const position = reward.rank || newAssociations[leaderboardType].length + 1;
+        newAssociations[leaderboardType] = [
+          ...newAssociations[leaderboardType], 
+          { rewardId: reward.id, position }
+        ];
+      }
+      
+      return newAssociations;
+    });
+  };
+
+  // Aggiorna la posizione di un premio
+  const handlePositionChange = (rewardId: number, position: number, leaderboardType: 'weekly' | 'monthly' | 'global') => {
+    setRewardAssociations(prev => {
+      const newAssociations = { ...prev };
+      const index = newAssociations[leaderboardType].findIndex(a => a.rewardId === rewardId);
+      
+      if (index >= 0) {
+        newAssociations[leaderboardType][index].position = position;
+      }
+      
+      return newAssociations;
+    });
+  };
+
+  // Salva le associazioni
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!game?.id) return null;
+      
+      try {
+        // Invece di eliminare tutte le associazioni esistenti, otteniamo prima quelle attuali
+        //Fix: Remove the empty object as second parameter for GET requests
+        const currentAssociations = await apiRequest('GET', `/api/feltrinelli/games/${game.id}/rewards`);
+        
+        // Prepara le nuove associazioni
+        const newAssociations = [
+          ...rewardAssociations.weekly.map(a => ({ 
+            rewardId: a.rewardId, 
+            position: a.position, 
+            leaderboardType: 'weekly' 
+          })),
+          ...rewardAssociations.monthly.map(a => ({ 
+            rewardId: a.rewardId, 
+            position: a.position, 
+            leaderboardType: 'monthly' 
+          })),
+          ...rewardAssociations.global.map(a => ({ 
+            rewardId: a.rewardId, 
+            position: a.position, 
+            leaderboardType: 'global' 
+          }))
+        ];
+        
+        // Identifica le associazioni da rimuovere
+        const toRemove = currentAssociations.filter((existing: any) => {
+          return !newAssociations.some(newAssoc => 
+            newAssoc.rewardId === existing.id && 
+            newAssoc.leaderboardType === existing.leaderboardType
+          );
+        });
+        
+        // Rimuovi le associazioni non più necessarie una per una
+        for (const assoc of toRemove) {
+          await apiRequest('DELETE', `/api/feltrinelli/games/${game.id}/rewards/${assoc.id}?leaderboardType=${assoc.leaderboardType}`, {});
+        }
+        
+        // Aggiungi o aggiorna le nuove associazioni
+        for (const { rewardId, position, leaderboardType } of newAssociations) {
+          // Controlla se l'associazione esiste già
+          const existing = currentAssociations.find((a: any) => 
+            a.id === rewardId && a.leaderboardType === leaderboardType
+          );
+          
+          if (existing) {
+            // Se esiste e la posizione è diversa, aggiorna
+            if (existing.position !== position) {
+              await apiRequest('PUT', `/api/feltrinelli/games/${game.id}/rewards/${rewardId}`, {
+                leaderboardType,
+                position
+              });
+            }
+          } else {
+            // Se non esiste, crea una nuova associazione
+            await apiRequest('POST', `/api/feltrinelli/games/${game.id}/rewards/${rewardId}`, {
+              leaderboardType,
+              position
+            });
+          }
+        }
+        
+        return true;
+      } catch (error) {
+        console.error("Error saving reward associations:", error);
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      toast({
+        title: "Premi associati",
+        description: "Le associazioni dei premi sono state salvate con successo",
+      });
+      
+      // Invalida le query pertinenti
+      queryClient.invalidateQueries({ queryKey: ['/api/feltrinelli/games'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/feltrinelli/games/${game?.id}/rewards`] });
+      
+      onClose();
+    },
+    onError: (error) => {
+      toast({
+        title: "Errore",
+        description: `Non è stato possibile salvare le associazioni: ${error instanceof Error ? error.message : 'Errore sconosciuto'}`,
+        variant: "destructive",
+      });
+    },
+  });
+
+
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="border-b pb-3">
+          <DialogTitle className="text-xl font-bold flex items-center">
+            <i className="fas fa-trophy mr-2 text-yellow-500"></i>
+            Associa Premi - {game?.name || ''}
+          </DialogTitle>
+        </DialogHeader>
+      
+        <div className="py-4">
+          <Tabs defaultValue="global" value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
+            <TabsList className="grid grid-cols-3 mb-4 bg-gray-100 p-1 rounded-lg">
+              <TabsTrigger 
+                value="global" 
+                className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600 rounded-md transition-all font-medium"
+              >
+                <i className="fas fa-globe mr-2"></i>
+                Classifica Globale
+              </TabsTrigger>
+              <TabsTrigger 
+                value="monthly" 
+                className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600 rounded-md transition-all font-medium"
+              >
+                <i className="fas fa-calendar-alt mr-2"></i>
+                Classifica Mensile
+              </TabsTrigger>
+              <TabsTrigger 
+                value="weekly" 
+                className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600 rounded-md transition-all font-medium"
+              >
+                <i className="fas fa-calendar-week mr-2"></i>
+                Classifica Settimanale
+              </TabsTrigger>
+            </TabsList>
+            
+            {/* Tab Classifica Globale */}
+            <TabsContent value="global" className="space-y-4">
+              <div className="bg-blue-50 p-3 rounded-md text-sm text-blue-700 mb-4">
+                <p className="flex items-center">
+                  <i className="fas fa-info-circle mr-2"></i>
+                  Seleziona i premi da assegnare nella classifica globale e imposta la posizione in classifica.
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto">
+                {rewards.filter(r => r.isActive).map(reward => {
+                  const association = rewardAssociations.global.find(a => a.rewardId === reward.id);
+                  return (
+                    <Card key={`global-${reward.id}`} className={association ? "border-primary border-2" : ""}>
+                      <CardContent className="p-3 flex items-center space-x-3">
+                        <Checkbox 
+                          id={`global-${reward.id}`}
+                          checked={!!association}
+                          onCheckedChange={() => handleRewardToggle(reward, 'global')}
+                          className="h-5 w-5"
+                        />
+                        
+                        {/* Immagine del premio */}
+                        <div className="h-12 w-12 rounded-md overflow-hidden flex-shrink-0 bg-gray-100">
+                          {reward.imageUrl ? (
+                            <img 
+                              src={reward.imageUrl} 
+                              alt={reward.name} 
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center text-gray-400">
+                              <i className="fas fa-award text-xl"></i>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex-1">
+                          <div className="font-medium">{reward.name}</div>
+                          <div className="text-sm text-muted-foreground flex items-center">
+                            <i className="fas fa-star text-yellow-500 mr-1"></i>
+                            {reward.points} punti
+                          </div>
+                          {reward.description && (
+                            <div className="text-xs text-gray-500 mt-1 line-clamp-2">{reward.description}</div>
+                          )}
+                        </div>
+                        
+                        {association && (
+                          <div className="flex items-center space-x-2 bg-gray-50 p-2 rounded-md">
+                            <Label htmlFor={`global-pos-${reward.id}`} className="text-sm whitespace-nowrap">Posizione:</Label>
+                            <Input 
+                              id={`global-pos-${reward.id}`}
+                              type="number" 
+                              min="1"
+                              value={association.position}
+                              onChange={(e) => handlePositionChange(reward.id, parseInt(e.target.value) || 1, 'global')}
+                              className="w-16 h-8"
+                            />
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </TabsContent>
+            
+            {/* Tab Classifica Mensile - Applica le stesse modifiche */}
+            <TabsContent value="monthly" className="space-y-4">
+              <div className="bg-blue-50 p-3 rounded-md text-sm text-blue-700 mb-4">
+                <p className="flex items-center">
+                  <i className="fas fa-info-circle mr-2"></i>
+                  Seleziona i premi da assegnare nella classifica mensile e imposta la posizione in classifica.
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto">
+                {rewards.filter(r => r.isActive).map(reward => {
+                  const association = rewardAssociations.monthly.find(a => a.rewardId === reward.id);
+                  return (
+                    <Card key={`monthly-${reward.id}`} className={association ? "border-primary border-2" : ""}>
+                      <CardContent className="p-3 flex items-center space-x-3">
+                        <Checkbox 
+                          id={`monthly-${reward.id}`}
+                          checked={!!association}
+                          onCheckedChange={() => handleRewardToggle(reward, 'monthly')}
+                          className="h-5 w-5"
+                        />
+                        
+                        {/* Immagine del premio */}
+                        <div className="h-12 w-12 rounded-md overflow-hidden flex-shrink-0 bg-gray-100">
+                          {reward.imageUrl ? (
+                            <img 
+                              src={reward.imageUrl} 
+                              alt={reward.name} 
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center text-gray-400">
+                              <i className="fas fa-award text-xl"></i>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex-1">
+                          <div className="font-medium">{reward.name}</div>
+                          <div className="text-sm text-muted-foreground flex items-center">
+                            <i className="fas fa-star text-yellow-500 mr-1"></i>
+                            {reward.points} punti
+                          </div>
+                          {reward.description && (
+                            <div className="text-xs text-gray-500 mt-1 line-clamp-2">{reward.description}</div>
+                          )}
+                        </div>
+                        
+                        {association && (
+                          <div className="flex items-center space-x-2 bg-gray-50 p-2 rounded-md">
+                            <Label htmlFor={`monthly-pos-${reward.id}`} className="text-sm whitespace-nowrap">Posizione:</Label>
+                            <Input 
+                              id={`monthly-pos-${reward.id}`}
+                              type="number" 
+                              min="1"
+                              value={association.position}
+                              onChange={(e) => handlePositionChange(reward.id, parseInt(e.target.value) || 1, 'monthly')}
+                              className="w-16 h-8"
+                            />
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </TabsContent>
+            
+            {/* Tab Classifica Settimanale - Applica le stesse modifiche */}
+            <TabsContent value="weekly" className="space-y-4">
+              <div className="bg-blue-50 p-3 rounded-md text-sm text-blue-700 mb-4">
+                <p className="flex items-center">
+                  <i className="fas fa-info-circle mr-2"></i>
+                  Seleziona i premi da assegnare nella classifica settimanale e imposta la posizione in classifica.
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto">
+                {rewards.filter(r => r.isActive).map(reward => {
+                  const association = rewardAssociations.weekly.find(a => a.rewardId === reward.id);
+                  return (
+                    <Card key={`weekly-${reward.id}`} className={association ? "border-primary border-2" : ""}>
+                      <CardContent className="p-3 flex items-center space-x-3">
+                        <Checkbox 
+                          id={`weekly-${reward.id}`}
+                          checked={!!association}
+                          onCheckedChange={() => handleRewardToggle(reward, 'weekly')}
+                          className="h-5 w-5"
+                        />
+                        
+                        {/* Immagine del premio - Aggiunta qui */}
+                        <div className="h-12 w-12 rounded-md overflow-hidden flex-shrink-0 bg-gray-100">
+                          {reward.imageUrl ? (
+                            <img 
+                              src={reward.imageUrl} 
+                              alt={reward.name} 
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center text-gray-400">
+                              <i className="fas fa-award text-xl"></i>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex-1">
+                          <div className="font-medium">{reward.name}</div>
+                          <div className="text-sm text-muted-foreground flex items-center">
+                            <i className="fas fa-star text-yellow-500 mr-1"></i>
+                            {reward.points} punti
+                          </div>
+                          {reward.description && (
+                            <div className="text-xs text-gray-500 mt-1 line-clamp-2">{reward.description}</div>
+                          )}
+                        </div>
+                        {association && (
+                          <div className="flex items-center space-x-2 bg-gray-50 p-2 rounded-md">
+                            <Label htmlFor={`weekly-pos-${reward.id}`} className="text-sm whitespace-nowrap">Posizione:</Label>
+                            <Input 
+                              id={`weekly-pos-${reward.id}`}
+                              type="number" 
+                              min="1"
+                              value={association.position}
+                              onChange={(e) => handlePositionChange(reward.id, parseInt(e.target.value) || 1, 'weekly')}
+                              className="w-16 h-8"
+                            />
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        <DialogFooter className="border-t pt-4 mt-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            className="border-gray-300"
+            disabled={saveMutation.isPending}
+          >
+            <i className="fas fa-times mr-2"></i>
+            Annulla
+          </Button>
+          <Button 
+            type="button"
+            className="bg-blue-600 hover:bg-blue-700"
+            disabled={saveMutation.isPending}
+            onClick={() => saveMutation.mutate()}
+          >
+            {saveMutation.isPending ? (
+              <>
+                <i className="fas fa-spinner fa-spin mr-2"></i>
+                Salvataggio...
+              </>
+            ) : (
+              <>
+                <i className="fas fa-save mr-2"></i>
+                Salva Associazioni
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

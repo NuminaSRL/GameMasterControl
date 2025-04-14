@@ -8,6 +8,8 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 // Modifica l'importazione
 import { configureUploadRoute } from './api/upload';
+import { configureRewardGamesRoutes, configureFeltrinelliRewardGamesRoutes } from './api/reward-games';
+import debugRoutes from './routes/debug';
 
 // Configurazione per ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -36,6 +38,7 @@ async function startServer() {
     // Middleware essenziali
     app.use(cors());
     app.use(express.json());
+    app.use('/api/debug', debugRoutes);
     
     // Configura la route di upload con Supabase
     configureUploadRoute(app);
@@ -81,6 +84,10 @@ async function startServer() {
     
     // Configura la route di upload
     configureUploadRoute(app);
+    
+    // Configure reward-games routes
+    configureRewardGamesRoutes(app);
+    configureFeltrinelliRewardGamesRoutes(app);
     
     // Registra le route e ottieni il server HTTP
     console.log('[Server] Tentativo di registrare le route...');

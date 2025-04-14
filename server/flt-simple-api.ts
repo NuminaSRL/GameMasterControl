@@ -479,7 +479,7 @@ export async function getGameBadges(req: Request, res: Response) {
         
         console.log("Risultato SQL diretto:", result);
         
-        if (!result || result.length === 0) {
+        if (!result || result.rows.length === 0) {
           return res.status(404).json({ 
             error: "Game mapping not found", 
             message: `No mapping found for Feltrinelli ID: ${gameId}` 
@@ -487,8 +487,8 @@ export async function getGameBadges(req: Request, res: Response) {
         }
         
         // Utilizziamo asserzioni di tipo per informare TypeScript sui tipi corretti
-        internalGameId = (result[0].internal_id as number) || (result[0].id as number);
-        gameName = result[0].name as string;
+        internalGameId = (result.rows[0].internal_id as number) || (result.rows[0].id as number);
+        gameName = result.rows[0].name as string;
         
         console.log("Mapping trovato con SQL diretto:", { internalGameId, gameName });
       } catch (dbError) {
