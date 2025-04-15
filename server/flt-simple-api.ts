@@ -716,6 +716,7 @@ export async function getGameFLTRewards(req: Request, res: Response) {
   try {
     const { gameId } = req.params;
     
+    // MODIFICA: Assicurati che questa query stia cercando correttamente per UUID
     const { data: rewards, error } = await supabase
       .from('flt_rewards')
       .select('*')

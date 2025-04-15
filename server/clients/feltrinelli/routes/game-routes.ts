@@ -3,8 +3,8 @@ import { gamesController } from '../controllers/games-controller';
 
 const router = Router();
 
-// Aggiungi questa route per aggiornare le impostazioni del gioco
-router.put('/games/:id/settings', gamesController.updateGameSettings);
+// MODIFICA: Rimuovi '/games' dal percorso poiché questo router sarà già montato su '/games'
+router.put('/:id/settings', gamesController.updateGameSettings);
 
 // Endpoint per recuperare tutti i giochi disponibili
 router.get('/', gamesController.getAllGames.bind(gamesController));
@@ -19,5 +19,10 @@ router.get('-settings/:gameId', gamesController.getGameSettings.bind(gamesContro
 
 // Endpoint per recuperare tutti i badge di un gioco
 router.get('/:gameId/badges', gamesController.getGameBadges.bind(gamesController));
+
+// Aggiungi questi endpoint per gestire i premi associati ai giochi
+router.get('/:gameId/rewards', gamesController.getGameRewards.bind(gamesController));
+router.post('/:gameId/rewards/:rewardId', gamesController.associateRewardToGame.bind(gamesController));
+router.delete('/:gameId/rewards/:rewardId', gamesController.removeRewardFromGame.bind(gamesController));
 
 export default router;

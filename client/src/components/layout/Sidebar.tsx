@@ -1,5 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SidebarItemProps {
   href: string;
@@ -28,14 +30,62 @@ function SidebarItem({ href, icon, children, active }: SidebarItemProps) {
 
 export default function Sidebar() {
   const [location] = useLocation();
+  const { user } = useAuth();
+  const [clientLogo, setClientLogo] = useState<string | null>(null);
+  
+  // Carica il logo del cliente quando l'utente è autenticato
+  useEffect(() => {
+    console.log("User in Sidebar:", user);
+    
+    if (user && user.clientId) {
+      // Costruisci il percorso del logo basato sul client_id
+      const logoPath = `/api/clients/${user.clientId}/logo`;
+      console.log("Setting client logo path:", logoPath);
+      setClientLogo(logoPath);
+      
+      // Verifica se l'endpoint è raggiungibile
+      fetch(logoPath, { method: 'HEAD' })
+        .then(response => {
+          console.log("Logo endpoint response:", response.status);
+        })
+        .catch(error => {
+          console.error("Error checking logo endpoint:", error);
+        });
+    } else {
+      console.log("No clientId found in user object");
+      setClientLogo(null);
+    }
+  }, [user]);
+  
+  // Log quando il logo cambia
+  useEffect(() => {
+    console.log("Client logo state:", clientLogo);
+  }, [clientLogo]);
   
   return (
     <div className="hidden md:flex md:flex-shrink-0">
       <div className="flex flex-col w-64 bg-gray-800 border-r border-gray-700">
         <div className="px-6 pt-8 pb-4">
-          <div className="flex items-center">
-            <i className="fas fa-gamepad text-white text-xl mr-3"></i>
-            <h1 className="text-xl font-semibold text-white">Game Manager</h1>
+          <div className="flex flex-col items-center">
+            <div className="flex items-center">
+              <i className="fas fa-gamepad text-white text-xl mr-3"></i>
+              <h1 className="text-xl font-semibold text-white">Game Manager</h1>
+            </div>
+            
+            {/* Logo del cliente */}
+            {clientLogo && (
+              <div className="mt-3 w-full flex justify-center">
+                <img 
+                  src={clientLogo} 
+                  alt="Logo Cliente" 
+                  className="h-10 w-auto object-contain bg-white p-1 rounded"
+                  onError={(e) => {
+                    console.error("Error loading logo:", e);
+                    setClientLogo(null);
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
         <div className="flex flex-col flex-grow px-4 mt-5">
