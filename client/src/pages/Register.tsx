@@ -1,190 +1,152 @@
-import * as React from 'react';
 import { useState } from 'react';
-import { Link } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useQuery } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
 
-// Interfaccia per il cliente
-interface Client {
-  id: number;
-  name: string;
-}
-
-const Register: React.FC = () => {
+export default function Register() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [clientId, setClientId] = useState<string>('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
-  const { toast } = useToast();
-
-  // Ottieni la lista dei clienti dal server
-  const { data: clients, isLoading: isLoadingClients } = useQuery<Client[]>({
-    queryKey: ['clients'],
-    queryFn: () => apiRequest('/api/clients/public'),
-  });
-
-  // Funzione per renderizzare gli elementi del select
-  const renderClientItems = () => {
-    if (!clients) return null;
-    
-    return clients.map((item: Client) => (
-      <SelectItem key={item.id} value={item.id.toString()}>
-        {item.name}
-      </SelectItem>
-    ));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!username || !email || !password) {
-      toast({
-        title: "Errore",
-        description: "Compila tutti i campi richiesti",
-        variant: "destructive",
-      });
-      return;
-    }
+    setError('');
     
     if (password !== confirmPassword) {
-      toast({
-        title: "Errore",
-        description: "Le password non coincidono",
-        variant: "destructive",
-      });
+      setError('Le password non corrispondono');
       return;
     }
     
-    if (password.length < 6) {
-      toast({
-        title: "Errore",
-        description: "La password deve contenere almeno 6 caratteri",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setIsSubmitting(true);
-    
+    setIsLoading(true);
+
     try {
-      // Passa anche il clientId alla funzione di registrazione
-      await register(
-        username, 
-        email, 
-        password, 
-        clientId && clientId !== "none" ? parseInt(clientId) : undefined
-      );
-      toast({
-        title: "Registrazione completata",
-        description: "Account creato con successo",
-      });
-    } catch (error) {
-      toast({
-        title: "Errore di registrazione",
-        description: error instanceof Error ? error.message : "Impossibile creare l'account",
-        variant: "destructive",
-      });
+      await register(username, email, password);
+      // Utilizziamo una redirezione standard
+      window.location.href = '/';
+    } catch (err: any) {
+      setError(err.message || 'Errore durante la registrazione');
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-md p-4">
-        <Card>
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center">Registrati</CardTitle>
-            <CardDescription className="text-center">
-              Crea un nuovo account
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  placeholder="Il tuo username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                />
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-lg shadow-md">
+        <div className="text-center">
+          <h2 className="text-3xl font-extrabold text-gray-900">Registrati</h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Crea un nuovo account
+          </p>
+        </div>
+        
+        {error && (
+          <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <i className="fas fa-exclamation-circle text-red-500"></i>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="nome@esempio.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{error}</p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Conferma Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="client">Cliente</Label>
-                <Select value={clientId} onValueChange={setClientId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleziona un cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nessun cliente</SelectItem>
-                    {isLoadingClients ? (
-                      <SelectItem value="loading" disabled>Caricamento clienti...</SelectItem>
-                    ) : (
-                      renderClientItems()
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? "Registrazione in corso..." : "Registrati"}
-              </Button>
-            </form>
-          </CardContent>
-          <CardFooter className="flex justify-center">
-            <div className="text-sm text-center">
-              Hai già un account?{" "}
-              <Link href="/login" className="text-blue-600 hover:underline">
-                Accedi
-              </Link>
             </div>
-          </CardFooter>
-        </Card>
+          </div>
+        )}
+        
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="rounded-md shadow-sm -space-y-px">
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+                Nome utente
+              </label>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                required
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Nome utente"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+            </div>
+            <div className="mt-4">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                Email
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="nome@esempio.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div className="mt-4">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                Password
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                required
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            <div className="mt-4">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                Conferma Password
+              </label>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                required
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Conferma Password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            >
+              {isLoading ? (
+                <span className="flex items-center">
+                  <i className="fas fa-spinner fa-spin mr-2"></i>
+                  Registrazione in corso...
+                </span>
+              ) : (
+                'Registrati'
+              )}
+            </button>
+          </div>
+          
+          <div className="text-center mt-4">
+            <p className="text-sm text-gray-600">
+              Hai già un account? <a href="/login" className="font-medium text-indigo-600 hover:text-indigo-500">Accedi</a>
+            </p>
+          </div>
+        </form>
       </div>
     </div>
   );
-};
-
-export default Register;
+}

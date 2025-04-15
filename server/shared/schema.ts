@@ -3,13 +3,15 @@
 // Definiamo le interfacce per gli utenti
 export interface User {
   id: number;
-  username: string;
+  email: string;
   password: string;
+  username?: string; // Reso opzionale
 }
 
 export interface InsertUser {
-  username: string;
+  email: string;
   password: string;
+  username?: string; // Reso opzionale
 }
 
 // Interfacce per i profili utente Feltrinelli

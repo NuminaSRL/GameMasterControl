@@ -14,7 +14,10 @@
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
     "@supabase/supabase-js": "^2.49.4",
+    "@types/bcrypt": "^5.0.2",
     "@types/cors": "^2.8.17",
+    "@types/jsonwebtoken": "^9.0.9",
+    "bcrypt": "^5.1.1",
     "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -22,6 +25,7 @@
     "drizzle-zod": "^0.7.0",
     "express": "^4.21.2",
     "express-session": "^1.18.1",
+    "jsonwebtoken": "^9.0.2",
     "memorystore": "^1.6.7",
     "node-fetch": "^3.3.2",
     "passport": "^0.7.0",
@@ -41,7 +45,10 @@
     "@types/passport-local": "^1.0.38",
     "@types/ws": "^8.5.13",
     "drizzle-kit": "^0.30.4",
-    "tsx": "^4.19.1"
+    "tsx": "^4.19.1",
+    "@types/jsonwebtoken": "^9.0.0",
+    "@types/bcrypt": "^5.0.0"
+    
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"

@@ -3,6 +3,8 @@ import { DatabaseStorage } from '../../storage';
 import { db } from '../../db';
 import { authMiddleware, roleMiddleware } from '../../middleware/auth';
 import { AuthService } from '../../services/authService';
+import path from 'path';
+import fs from 'fs';
 
 const router = Router();
 const storage = new DatabaseStorage();
@@ -126,6 +128,40 @@ router.delete('/:id', authMiddleware(authService), roleMiddleware(['admin']), as
     res.status(204).send();
   } catch (error) {
     res.status(500).json({ message: `Error deleting client: ${error instanceof Error ? error.message : 'Unknown error'}` });
+  }
+});
+
+// Endpoint per ottenere il logo di un cliente
+router.get('/:clientId/logo', async (req, res) => {
+  try {
+    const clientId = parseInt(req.params.clientId);
+    
+    // Prima verifica se il client esiste nel database
+    const client = await storage.getClient(clientId);
+    if (!client) {
+      return res.status(404).json({ message: 'Client not found' });
+    }
+    
+    // Se il client ha un logo_url nel database, usa quello
+    if (client.logo_url) {
+      return res.redirect(client.logo_url);
+    }
+    
+    // Altrimenti cerca un file locale
+    const logoPath = path.join(__dirname, '../../../public/clients', clientId.toString(), 'logo.png');
+    
+    // Verifica se il file esiste
+    if (fs.existsSync(logoPath)) {
+      // Invia il file
+      return res.sendFile(logoPath);
+    }
+    
+    // Se non c'è logo, invia un 404
+    res.status(404).json({ message: 'Logo not found' });
+  } catch (error) {
+    res.status(500).json({ 
+      message: `Error fetching client logo: ${error instanceof Error ? error.message : 'Unknown error'}` 
+    });
   }
 });
 

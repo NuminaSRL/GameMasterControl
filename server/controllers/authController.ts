@@ -16,41 +16,69 @@ export class AuthController {
   }
 
   // Registrazione utente
-  async register(req: Request, res: Response) {
+  async register(req: Request, res: Response): Promise<void> {
     try {
-      const { username, email, password, clientId } = req.body;
+      // Rimuoviamo username dai campi richiesti
+      const { name, email, password, clientId } = req.body;
       
-      if (!username || !email || !password) {
-        return res.status(400).json({ message: 'Username, email and password are required' });
+      if (!email || !password || !clientId) {
+        res.status(400).json({ message: 'Email, password e clientId sono obbligatori' });
+        return;
       }
       
-      // Verifica se l'email è già in uso
-      const existingUser = await this.storage.getUserByEmail(email);
+      console.log('[Auth] Tentativo di registrazione con:', { email, clientId });
+      
+      // Verifica se l'utente esiste già
+      const existingUser = await this.authService.getUserByEmail(email);
+      
       if (existingUser) {
-        return res.status(400).json({ message: 'Email already in use' });
+        res.status(409).json({ message: 'Utente già esistente' });
+        return;
       }
       
-      // Se è stato fornito un clientId, verifica che esista
-      if (clientId) {
-        const client = await this.storage.getClientById(clientId);
-        if (!client) {
-          return res.status(400).json({ message: 'Invalid client ID' });
-        }
+      // Ottieni informazioni sul client
+      const client = await this.storage.getClient(clientId);
+      
+      if (!client) {
+        res.status(404).json({ message: 'Client non trovato' });
+        return;
       }
       
-      // Registra l'utente
-      const user = await this.authService.registerUser({
-        username,
-        email,
-        password,
-        role: 'user', // Ruolo predefinito
-        clientId: clientId || null
-      });
+      console.log('[Auth] Client trovato per la registrazione:', client);
       
-      res.status(201).json({ success: true, message: 'User registered successfully' });
+      // Crea l'utente con i campi appropriati
+      try {
+        const user = await this.authService.createUser({
+          email,
+          password,
+          clientId,
+          role: 'user'
+        });
+        
+        const token = this.authService.generateToken(user);
+        
+        res.status(201).json({ 
+          user: {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            clientId: user.clientId || user.client_id
+          }, 
+          token 
+        });
+      } catch (createError) {
+        console.error('[Auth] Errore nella creazione dell\'utente:', createError);
+        res.status(500).json({ 
+          message: 'Errore nella creazione dell\'utente', 
+          details: createError instanceof Error ? createError.message : 'Errore sconosciuto'
+        });
+      }
     } catch (error) {
-      console.error('Registration error:', error);
-      res.status(500).json({ message: `Registration failed: ${error instanceof Error ? error.message : 'Unknown error'}` });
+      console.error('[Auth] Errore di registrazione:', error);
+      res.status(500).json({ 
+        message: 'Errore durante la registrazione',
+        details: error instanceof Error ? error.message : 'Errore sconosciuto'
+      });
     }
   }
 
@@ -60,20 +88,59 @@ export class AuthController {
       // Valida i dati di input
       const { email, password } = loginSchema.parse(req.body);
       
-      // Effettua il login
-      const result = await this.authService.loginUser(email, password);
+      console.log(`[Auth] Tentativo di login per l'utente: ${email}`);
       
-      if (!result) {
-        return res.status(401).json({ message: 'Invalid email or password' });
+      // Ottieni l'utente dal database
+      const user = await this.authService.getUserByEmail(email);
+      
+      if (!user) {
+        console.log(`[Auth] Utente non trovato: ${email}`);
+        return res.status(401).json({ message: 'Email o password non validi' });
       }
       
+      console.log(`[Auth] Utente trovato: ${user.id}, verifico la password`);
+      
+      // Verifica la password
+      let isPasswordValid = false;
+      
+      // Se l'utente è autenticato tramite Supabase Auth
+      if (user.is_auth_user) {
+        console.log(`[Auth] Utente Supabase Auth, verifico con Supabase`);
+        // Usa il servizio di autenticazione per verificare la password con Supabase
+        isPasswordValid = await this.authService.verifySupabasePassword(email, password);
+      } else {
+        // Utente legacy, usa il metodo standard
+        console.log(`[Auth] Utente legacy, verifico con metodo standard`);
+        isPasswordValid = await this.authService.verifyPassword(user, password);
+      }
+      
+      if (!isPasswordValid) {
+        console.log(`[Auth] Password non valida per l'utente: ${email}`);
+        return res.status(401).json({ message: 'Email o password non validi' });
+      }
+      
+      console.log(`[Auth] Login riuscito per l'utente: ${email}`);
+      
+      // Genera il token
+      const token = this.authService.generateToken(user);
+      
+      // Restituisci i dati dell'utente e il token
       res.json({
-        message: 'Login successful',
-        user: result.user,
-        token: result.token
+        message: 'Login effettuato con successo',
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          clientId: user.client_id || user.clientId,
+          username: user.username
+        },
+        token
       });
     } catch (error) {
-      res.status(400).json({ message: `Login failed: ${error instanceof Error ? error.message : 'Unknown error'}` });
+      console.error(`[Auth] Errore durante il login:`, error);
+      res.status(400).json({ 
+        message: `Login fallito: ${error instanceof Error ? error.message : 'Errore sconosciuto'}` 
+      });
     }
   }
 

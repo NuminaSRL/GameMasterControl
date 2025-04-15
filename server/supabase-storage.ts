@@ -122,24 +122,99 @@ export class SupabaseStorage implements IStorage {
   async getUserByEmail(email: string): Promise<any> {
     console.log(`[SupabaseStorage] Getting user by email ${email}`);
     try {
-      const { data, error } = await supabase
-        .from('profiles')
+      // Verifichiamo prima nella tabella auth.users di Supabase
+      // Utilizziamo il metodo corretto dell'API di Supabase
+      const { data, error } = await supabase.auth.admin.listUsers();
+      
+      if (error) {
+        console.error(`[SupabaseStorage] Error listing users: ${error}`);
+      } else if (data && data.users) {
+        // Cerchiamo manualmente l'utente con l'email specificata
+        const authUser = data.users.find(user => user.email === email);
+        
+        if (authUser) {
+          console.log(`[SupabaseStorage] Found user in Supabase Auth: ${authUser.id}`);
+          
+          // Recuperiamo i dati del profilo dalla tabella profiles
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', authUser.id)
+            .maybeSingle();
+          
+          if (profileError) {
+            console.error(`[SupabaseStorage] Error getting profile: ${profileError}`);
+          } else if (profileData) {
+            console.log(`[SupabaseStorage] Found profile for user: ${authUser.id} with client_id: ${profileData.client_id}`);
+            
+            // Restituiamo un oggetto che combina i dati di autenticazione e profilo
+            return {
+              id: authUser.id,
+              email: authUser.email,
+              username: profileData.username, // Include username for login
+              role: profileData.role || 'user',
+              client_id: profileData.client_id,
+              is_active: profileData.is_active,
+              // Non includiamo la password perché gestita da Supabase Auth
+              is_auth_user: true, // Flag per indicare che è un utente autenticato tramite Supabase
+              auth_id: authUser.id // Include the auth ID for verification
+            };
+          } else {
+            console.log(`[SupabaseStorage] No profile found for auth user: ${authUser.id}`);
+          }
+        }
+      }
+      
+      // Se non troviamo l'utente in auth, verifichiamo nella tabella flt_profiles
+      // per retrocompatibilità
+      const { data: fltData, error: fltError } = await supabase
+        .from('flt_profiles')
         .select('*')
         .eq('email', email)
         .single();
-        
-      if (error) {
-        console.error('[SupabaseStorage] Error getting user by email:', error);
+      
+      if (fltError) {
+        console.error(`[SupabaseStorage] Error getting user by email from flt_profiles: ${fltError}`);
         return null;
       }
       
-      console.log('[SupabaseStorage] User found by email:', data);
-      return data;
+      return fltData;
     } catch (error) {
-      console.error('[SupabaseStorage] Error getting user by email:', error);
+      console.error(`[SupabaseStorage] Error getting user by email:`, error);
       return null;
     }
   }
+
+    // Aggiungi questo metodo alla classe SupabaseStorage
+    async verifyPassword(email: string, password: string): Promise<boolean> {
+      console.log(`[SupabaseStorage] Verifica password per l'utente: ${email}`);
+      try {
+        // Usa l'API di Supabase per verificare la password
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        
+        if (error) {
+          console.error(`[SupabaseStorage] Errore verifica password:`, error);
+          return false;
+        }
+        
+        console.log(`[SupabaseStorage] Password verificata con successo per l'utente: ${email}`);
+        return !!data.user;
+      } catch (error) {
+        console.error(`[SupabaseStorage] Errore durante la verifica della password:`, error);
+        return false;
+      }
+    }
+    
+    async supabaseSignIn(email: string, password: string): Promise<any> {
+      console.log(`[SupabaseStorage] Tentativo di login Supabase per l'utente: ${email}`);
+      return await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+    }
   
   async getRewardsByClient(clientId: number): Promise<any[]> {
     console.log(`[SupabaseStorage] Getting rewards by client ${clientId}`);
@@ -160,6 +235,67 @@ export class SupabaseStorage implements IStorage {
     } catch (error) {
       console.error('[SupabaseStorage] Error getting rewards by client:', error);
       return [];
+    }
+  }
+
+  async getUserById(id: string): Promise<any> {
+    console.log(`[SupabaseStorage] Getting user by ID ${id}`);
+    try {
+      // Cerca prima nella tabella profiles standard
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      
+      if (profileData) {
+        console.log(`[SupabaseStorage] Found user in profiles with client_id: ${profileData.client_id}`);
+        
+        // Recuperiamo i dati di autenticazione
+        const { data: authData, error: authError } = await supabase.auth.admin.getUserById(id);
+        
+        if (authError) {
+          console.error(`[SupabaseStorage] Error getting auth data: ${authError}`);
+        } else if (authData && authData.user) {
+          // Combiniamo i dati di auth e profile
+          return {
+            id: authData.user.id,
+            email: authData.user.email,
+            role: profileData.role || 'user',
+            client_id: profileData.client_id,
+            is_active: profileData.is_active,
+            is_auth_user: true
+          };
+        }
+        
+        // Se non troviamo i dati auth, restituiamo solo il profilo
+        return profileData;
+      }
+      
+      // Se non troviamo nella tabella profiles, cerchiamo nella tabella flt_profiles
+      const { data: fltProfileData, error: fltProfileError } = await supabase
+        .from('flt_profiles')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      
+      if (fltProfileData) {
+        console.log(`[SupabaseStorage] Found user in flt_profiles with client_id: ${fltProfileData.client_id}`);
+        return fltProfileData;
+      }
+      
+      if (profileError) {
+        console.error(`[SupabaseStorage] Error getting user by ID from profiles: ${profileError}`);
+      }
+      
+      if (fltProfileError) {
+        console.error(`[SupabaseStorage] Error getting user by ID from flt_profiles: ${fltProfileError}`);
+      }
+      
+      return null;
+    } catch (error) {
+      console.error(`[SupabaseStorage] Error getting user by ID:`, error);
+      return null;
     }
   }
 
@@ -315,15 +451,73 @@ async getClientById(id: number): Promise<any> {
     return formatDates(data) as User;
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const { data, error } = await supabase
-      .from('users')
-      .insert([insertUser])
-      .select()
-      .single();
-    
-    if (error) throw new Error(`Failed to create user: ${error.message}`);
-    return formatDates(data) as User;
+  async createUser(userData: any): Promise<any> {
+    console.log(`[SupabaseStorage] Creating user with email ${userData.email}`);
+    try {
+      // Verifichiamo che sia stato fornito un client_id
+      if (!userData.clientId) {
+        console.error(`[SupabaseStorage] Client ID is required for user creation`);
+        throw new Error('Client ID is required for user creation');
+      }
+      
+      console.log(`[SupabaseStorage] Creating user for client ID: ${userData.clientId}`);
+      
+      // Creiamo l'utente in Supabase Auth
+      const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+        email: userData.email,
+        password: userData.password,
+        email_confirm: true // Conferma automaticamente l'email
+      });
+      
+      if (authError) {
+        console.error(`[SupabaseStorage] Error creating auth user: ${authError}`);
+        throw authError;
+      }
+      
+      console.log(`[SupabaseStorage] Created auth user: ${authUser.user.id}`);
+      
+      // Creiamo il profilo associato all'utente con client_id
+      // Generiamo un username basato sull'email (parte prima della @)
+      const username = userData.email.split('@')[0];
+      
+      const profileData = {
+        id: authUser.user.id,
+        username: username, // Aggiungiamo l'username richiesto
+        role: userData.role || 'user',
+        client_id: userData.clientId,
+        is_active: true
+      };
+      
+      console.log(`[SupabaseStorage] Creating profile with data:`, profileData);
+      
+      const { data: createdProfile, error: profileError } = await supabase
+        .from('profiles')
+        .insert([profileData])
+        .select()
+        .single();
+      
+      if (profileError) {
+        console.error(`[SupabaseStorage] Error creating profile: ${profileError}`);
+        // Se fallisce la creazione del profilo, eliminiamo l'utente auth
+        await supabase.auth.admin.deleteUser(authUser.user.id);
+        throw profileError;
+      }
+      
+      console.log(`[SupabaseStorage] Created profile for user: ${authUser.user.id} with client_id: ${createdProfile.client_id}`);
+      
+      // Restituiamo un oggetto che combina i dati di autenticazione e profilo
+      return {
+        id: authUser.user.id,
+        email: authUser.user.email,
+        username: createdProfile.username,
+        role: createdProfile.role,
+        client_id: createdProfile.client_id,
+        is_active: createdProfile.is_active
+      };
+    } catch (error) {
+      console.error(`[SupabaseStorage] Error creating user:`, error);
+      throw error;
+    }
   }
 
   // === Game operations ===

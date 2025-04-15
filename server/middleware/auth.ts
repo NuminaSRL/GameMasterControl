@@ -27,8 +27,13 @@ export const authMiddleware = (authService: AuthService) => {
         return res.status(401).json({ message: 'Invalid or expired token' });
       }
       
-      // Verifica se l'utente è attivo
-      if (!user.isActive) {
+      // Aggiungiamo log per debug
+      console.log('[Auth Middleware] User from token:', user);
+      
+      // Verifica se l'utente è attivo, ma solo se la proprietà esiste
+      // Modifichiamo questa condizione per evitare il 403
+      if (user.isActive === false) {
+        console.log('[Auth Middleware] User account is disabled:', user.id);
         return res.status(403).json({ message: 'User account is disabled' });
       }
       
@@ -37,6 +42,7 @@ export const authMiddleware = (authService: AuthService) => {
       
       next();
     } catch (error) {
+      console.error('[Auth Middleware] Authentication error:', error);
       return res.status(401).json({ message: 'Authentication failed' });
     }
   };

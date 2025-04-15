@@ -15,11 +15,13 @@ import { supabase } from "./supabase"; // Aggiungi questa importazione
 
 
 // Storage interface for all operations
+// Aggiorna l'interfaccia IStorage per includere getUserById
 export interface IStorage {
   // User operations
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+
   
   // Game operations
   getAllGames(): Promise<Game[]>;
@@ -34,6 +36,9 @@ export interface IStorage {
   getClientById(id: number): Promise<any>;
   getRewardsByClient(clientId: number): Promise<Reward[]>; // Add this missing method
   getUserByEmail(email: string): Promise<any>; // Add this missing method
+  getUserById(id: string): Promise<any>;
+  verifyPassword?(email: string, password: string): Promise<boolean>;
+  supabaseSignIn?(email: string, password: string): Promise<any>;
   
   // Badge operations
   getAllBadges(): Promise<Badge[]>;
@@ -69,6 +74,20 @@ export class DatabaseStorage implements IStorage {
       return result.rows.length > 0 ? result.rows[0] : null;
     } catch (error) {
       console.error('Error getting user by email:', error);
+      return null;
+    }
+  }
+  
+  // Implementazione del metodo getUserById mancante
+  async getUserById(id: string): Promise<any> {
+    try {
+      const result = await db.execute(
+        `SELECT * FROM profiles WHERE id = $1 LIMIT 1`,
+        [id]
+      );
+      return result.rows.length > 0 ? result.rows[0] : null;
+    } catch (error) {
+      console.error('Error getting user by ID:', error);
       return null;
     }
   }
