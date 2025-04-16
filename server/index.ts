@@ -8,8 +8,10 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 // Modifica l'importazione
 import { configureUploadRoute } from './api/upload';
-import { configureRewardGamesRoutes, configureFeltrinelliRewardGamesRoutes } from './api/reward-games';
+import { configureRewardGamesRoutes } from './api/reward-games'; // Rimuovi configureFeltrinelliRewardGamesRoutes
 import debugRoutes from './routes/debug';
+// Importa il router Feltrinelli
+import feltrinelliRouter from './clients/feltrinelli/routes/index';
 
 // Configurazione per ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -63,6 +65,25 @@ async function startServer() {
         console.error('[Server] Errore impostazione permessi:', err);
       }
     }
+
+    console.log('[Server] Montaggio router Feltrinelli su /api/feltrinelli');
+app.use('/api/feltrinelli', feltrinelliRouter);
+
+// Aggiungi un log per tutte le rotte registrate
+console.log('[Server] Rotte registrate:');
+app._router.stack.forEach((middleware: any) => {
+  if (middleware.route) {
+    // Rotte dirette
+    console.log(`[Server] Rotta: ${middleware.route.path}, Metodi: ${Object.keys(middleware.route.methods)}`);
+  } else if (middleware.name === 'router') {
+    // Router montati
+    middleware.handle.stack.forEach((handler: any) => {
+      if (handler.route) {
+        console.log(`[Server] Router: ${middleware.regexp}, Rotta: ${handler.route.path}, Metodi: ${Object.keys(handler.route.methods)}`);
+      }
+    });
+  }
+});
     
     // Servi file statici da /uploads
     app.use('/uploads', express.static(uploadsPath, {
@@ -87,7 +108,7 @@ async function startServer() {
     
     // Configure reward-games routes
     configureRewardGamesRoutes(app);
-    configureFeltrinelliRewardGamesRoutes(app);
+    // Rimuovi questa riga: configureFeltrinelliRewardGamesRoutes(app);
     
     // Registra le route e ottieni il server HTTP
     console.log('[Server] Tentativo di registrare le route...');

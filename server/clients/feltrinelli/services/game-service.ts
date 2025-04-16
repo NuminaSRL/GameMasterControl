@@ -12,28 +12,53 @@ export class GameService {
   /**
    * Recupera tutti i giochi disponibili
    */
-  async getAllGames(): Promise<Game[]> {
+  async getAllGames() {
     try {
-      console.log('📣 CALLED: getAllGames from clients/feltrinelli/services/game-service.ts');
+      // Recupera i giochi dalla tabella flt_games
       const { data, error } = await supabase
         .from('flt_games')
         .select('*')
-        .eq('is_active', true)
         .order('name', { ascending: true });
       
-      if (error) throw error;
+      if (error) {
+        console.error('[GameService] Error fetching games:', error);
+        throw error;
+      }
       
-      return data?.map(game => ({
-        id: game.id,
-        feltrinelli_id: game.feltrinelli_id,
-        name: game.name,
-        description: game.description,
-        is_active: game.is_active,
-        created_at: game.created_at,
-        settings: game.settings || {}
-      })) || [];
+      // Recupera le impostazioni per tutti i giochi
+      const gameIds = data.map(game => game.id);
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('flt_game_settings')
+        .select('*')
+        .in('game_id', gameIds);
+      
+      if (settingsError) {
+        console.error('[GameService] Error fetching game settings:', settingsError);
+        // Non interrompiamo l'esecuzione, continuiamo
+      }
+      
+      // Crea una mappa delle impostazioni per un accesso più veloce
+      const settingsMap: { [key: string]: any } = {};
+      if (settingsData) {
+        settingsData.forEach(setting => {
+          settingsMap[setting.game_id] = setting;
+        });
+      }
+      
+      // Assicurati che i campi siano mappati correttamente
+      const formattedGames = data.map(game => {
+        const gameSettings = settingsMap[game.id] || {};
+        return {
+          ...game,
+          isActive: game.is_active, // Aggiungi esplicitamente isActive
+          settings: gameSettings
+        };
+      });
+      
+      console.log('[GameService] Giochi formattati:', formattedGames);
+      return formattedGames;
     } catch (error) {
-      console.error('[GameService] Error fetching all games:', error);
+      console.error('[GameService] Error in getAllGames:', error);
       throw error;
     }
   }
@@ -42,6 +67,8 @@ export class GameService {
   async getGame(id: string): Promise<Game> {
     try {
       console.log(`📣 CALLED: getGame(${id}) from clients/feltrinelli/services/game-service.ts`);
+      
+      // Recupera il gioco
       const { data, error } = await supabase
         .from('flt_games')
         .select('*')
@@ -51,6 +78,18 @@ export class GameService {
       if (error) throw error;
       if (!data) throw new Error(`Game with ID ${id} not found`);
       
+      // Recupera le impostazioni del gioco
+      const { data: settings, error: settingsError } = await supabase
+        .from('flt_game_settings')
+        .select('*')
+        .eq('game_id', id)
+        .maybeSingle();
+      
+      if (settingsError) {
+        console.error(`[GameService] Error fetching settings for game ${id}:`, settingsError);
+        // Non interrompiamo l'esecuzione, continuiamo
+      }
+      
       return {
         id: data.id,
         feltrinelli_id: data.feltrinelli_id,
@@ -58,7 +97,7 @@ export class GameService {
         description: data.description,
         is_active: data.is_active,
         created_at: data.created_at,
-        settings: data.settings || {}
+        settings: settings || {}
       };
     } catch (error) {
       console.error(`[GameService] Error fetching game with ID ${id}:`, error);
@@ -72,16 +111,53 @@ export class GameService {
    */
   async getGameSettings(gameId: string): Promise<GameSettings> {
     try {
-      const { data, error } = await supabase
+      // Recupera le informazioni del gioco
+      const { data: gameData, error: gameError } = await supabase
         .from('flt_games')
-        .select('settings')
+        .select('*')
         .eq('id', gameId)
         .single();
       
-      if (error) throw error;
-      if (!data) throw new Error(`Game with ID ${gameId} not found`);
+      if (gameError) {
+        console.error(`[GameService] Error fetching game data:`, gameError);
+        throw gameError;
+      }
       
-      return data.settings || {};
+      // Recupera le impostazioni del gioco
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('flt_game_settings')
+        .select('*')
+        .eq('game_id', gameId)
+        .maybeSingle();
+      
+      if (settingsError) {
+        console.error(`[GameService] Error fetching game settings:`, settingsError);
+        // Non interrompiamo l'esecuzione, continuiamo con i dati del gioco
+      }
+      
+      // Combina i dati per la risposta
+      const response = {
+        id: gameId,
+        name: gameData.name,
+        description: gameData.description || '',
+        isActive: gameData.is_active,
+        weeklyLeaderboard: gameData.weekly_leaderboard,
+        monthlyLeaderboard: gameData.monthly_leaderboard,
+        gameType: gameData.game_type,
+        feltrinelliGameId: gameData.feltrinelli_id,
+        timerDuration: settingsData?.timer_duration ?? 30,
+        questionCount: settingsData?.question_count ?? 10,
+        difficulty: settingsData?.difficulty ?? 1,
+        settings: {
+          timerDuration: settingsData?.timer_duration ?? 30,
+          questionCount: settingsData?.question_count ?? 10,
+          difficulty: settingsData?.difficulty ?? 1
+        },
+        createdAt: gameData.created_at,
+        updatedAt: gameData.updated_at || settingsData?.updated_at
+      };
+      
+      return response;
     } catch (error) {
       console.error(`[GameService] Error fetching settings for game ${gameId}:`, error);
       throw error;
@@ -122,46 +198,137 @@ export class GameService {
   /**
    * Aggiorna le impostazioni di un gioco
    */
-  async updateGameSettings(gameId: string, settings: Partial<GameSettings>): Promise<GameSettings> {
+  async updateGameSettings(gameId: string, settings: any) {
+    console.log('[GameService] Updating settings for game:', gameId, settings);
+    
     try {
-      console.log(`📣 CALLED: updateGameSettings(${gameId}) from clients/feltrinelli/services/game-service.ts`);
-      console.log(`Settings to update:`, settings);
+      // Separa i campi in base alla tabella a cui appartengono
+      const gameFields: any = {};
+      const settingsFields: any = {
+        game_id: gameId,
+        updated_at: new Date()
+      };
       
-      // Prima otteniamo il gioco corrente
-      const { data: gameData, error: gameError } = await supabase
-        .from('flt_games')  // Assicurati che stiamo usando la tabella flt_games
-        .select('settings')
-        .eq('id', gameId)
-        .single();
+      // Campi che appartengono a flt_games
+      if (settings.name !== undefined) gameFields.name = settings.name;
+      if (settings.description !== undefined) gameFields.description = settings.description;
+      if (settings.isActive !== undefined) gameFields.is_active = settings.isActive;
+      if (settings.weeklyLeaderboard !== undefined) gameFields.weekly_leaderboard = settings.weeklyLeaderboard;
+      if (settings.monthlyLeaderboard !== undefined) gameFields.monthly_leaderboard = settings.monthlyLeaderboard;
+      if (settings.gameType !== undefined) gameFields.game_type = settings.gameType;
+      if (settings.feltrinelliGameId !== undefined) gameFields.feltrinelli_id = settings.feltrinelliGameId;
       
-      if (gameError) throw gameError;
-      if (!gameData) throw new Error(`Game with ID ${gameId} not found`);
+      // Campi che appartengono a flt_game_settings
+      if (settings.timerDuration !== undefined) settingsFields.timer_duration = settings.timerDuration;
+      if (settings.questionCount !== undefined) settingsFields.question_count = settings.questionCount;
+      if (settings.difficulty !== undefined) settingsFields.difficulty = settings.difficulty;
       
-      // Combiniamo le impostazioni esistenti con quelle nuove
-      const currentSettings = gameData.settings || {};
-      const updatedSettings = { ...currentSettings, ...settings };
-      
-      console.log(`Current settings:`, currentSettings);
-      console.log(`Updated settings:`, updatedSettings);
-      
-      // Aggiorniamo le impostazioni nel database
-      const { data, error } = await supabase
-        .from('flt_games')  // Assicurati che stiamo usando la tabella flt_games
-        .update({ settings: updatedSettings })
-        .eq('id', gameId)
-        .select('settings')
-        .single();
-      
-      if (error) {
-        console.error(`Error updating settings in database:`, error);
-        throw error;
+      // Aggiorna i campi in flt_games se necessario
+      if (Object.keys(gameFields).length > 0) {
+        console.log('[GameService] Updating game fields in flt_games:', gameFields);
+        
+        const { error: gameError } = await supabase
+          .from('flt_games')
+          .update(gameFields)
+          .eq('id', gameId);
+        
+        if (gameError) {
+          console.error('[GameService] Error updating game:', gameError);
+          throw gameError;
+        }
       }
-      if (!data) throw new Error(`Failed to update settings for game ${gameId}`);
       
-      console.log(`Settings updated successfully:`, data.settings);
-      return data.settings;
+      // Aggiorna i campi in flt_game_settings
+      console.log('[GameService] Updating settings fields in flt_game_settings:', settingsFields);
+      
+      // Verifica se esistono già impostazioni per questo gioco
+      const { data: existingSettings, error: checkError } = await supabase
+        .from('flt_game_settings')
+        .select('*')
+        .eq('game_id', gameId)
+        .maybeSingle();
+      
+      if (checkError) {
+        console.error('[GameService] Error checking existing settings:', checkError);
+        throw checkError;
+      }
+      
+      if (existingSettings) {
+        // Aggiorna le impostazioni esistenti
+        const { error: updateError } = await supabase
+          .from('flt_game_settings')
+          .update(settingsFields)
+          .eq('game_id', gameId);
+        
+        if (updateError) {
+          console.error('[GameService] Error updating settings:', updateError);
+          throw updateError;
+        }
+      } else {
+        // Crea nuove impostazioni con valori predefiniti per i campi mancanti
+        if (settingsFields.timer_duration === undefined) settingsFields.timer_duration = 30;
+        if (settingsFields.question_count === undefined) settingsFields.question_count = 10;
+        if (settingsFields.difficulty === undefined) settingsFields.difficulty = 1;
+        settingsFields.created_at = new Date();
+        
+        const { error: insertError } = await supabase
+          .from('flt_game_settings')
+          .insert(settingsFields);
+        
+        if (insertError) {
+          console.error('[GameService] Error creating settings:', insertError);
+          throw insertError;
+        }
+      }
+      
+      // Recupera i dati aggiornati per la risposta
+      const { data: gameData, error: gameDataError } = await supabase
+        .from('flt_games')
+        .select('*')
+        .eq('id', gameId)
+        .single();
+      
+      if (gameDataError) {
+        console.error('[GameService] Error fetching updated game data:', gameDataError);
+        throw gameDataError;
+      }
+      
+      const { data: settingsData, error: settingsDataError } = await supabase
+        .from('flt_game_settings')
+        .select('*')
+        .eq('game_id', gameId)
+        .maybeSingle();
+      
+      if (settingsDataError) {
+        console.error('[GameService] Error fetching updated settings data:', settingsDataError);
+        // Non interrompiamo l'esecuzione, continuiamo con i dati del gioco
+      }
+      
+      // Combina i dati per la risposta
+      const response = {
+        id: gameId,
+        name: gameData.name,
+        description: gameData.description || '',
+        isActive: gameData.is_active,
+        weeklyLeaderboard: gameData.weekly_leaderboard,
+        monthlyLeaderboard: gameData.monthly_leaderboard,
+        gameType: gameData.game_type,
+        feltrinelliGameId: gameData.feltrinelli_id,
+        timerDuration: settingsData?.timer_duration ?? 30,
+        questionCount: settingsData?.question_count ?? 10,
+        difficulty: settingsData?.difficulty ?? 1,
+        settings: {
+          timerDuration: settingsData?.timer_duration ?? 30,
+          questionCount: settingsData?.question_count ?? 10,
+          difficulty: settingsData?.difficulty ?? 1
+        },
+        createdAt: gameData.created_at,
+        updatedAt: gameData.updated_at
+      };
+      
+      return response;
     } catch (error) {
-      console.error(`[GameService] Error updating settings for game ${gameId}:`, error);
+      console.error('[GameService] Error updating settings:', error);
       throw error;
     }
   }

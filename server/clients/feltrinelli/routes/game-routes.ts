@@ -5,6 +5,8 @@ const router = Router();
 
 // MODIFICA: Rimuovi '/games' dal percorso poiché questo router sarà già montato su '/games'
 router.put('/:id/settings', gamesController.updateGameSettings);
+// Aggiungi supporto per PATCH per aggiornamenti parziali
+router.patch('/:id/settings', gamesController.updateGameSettings);
 
 // Endpoint per recuperare tutti i giochi disponibili
 router.get('/', gamesController.getAllGames.bind(gamesController));

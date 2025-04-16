@@ -20,13 +20,36 @@ export default function Games() {
   const { data: games = [], isLoading, error } = useQuery<Game[]>({
     queryKey: ['/api/feltrinelli/games'],
     queryFn: async () => {
-      const response = await fetch('/api/feltrinelli/games');
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
+      try {
+        console.log('Fetching games from Feltrinelli API');
+        const response = await fetch('/api/feltrinelli/games');
+        
+        if (!response.ok) {
+          console.error('API response not OK:', response.status, response.statusText);
+          throw new Error(`Network response was not ok: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Raw data from Feltrinelli API:', data);
+        
+        // Assicuriamoci che i campi siano mappati correttamente
+        const formattedGames = data.map((game: any) => ({
+          id: game.id,
+          name: game.name,
+          description: game.description || '',
+          isActive: game.is_active || game.isActive || false,
+          imageUrl: game.image_url || game.imageUrl || '',
+          settings: game.settings || {},
+          createdAt: game.created_at || game.createdAt || new Date().toISOString(),
+          updatedAt: game.updated_at || game.updatedAt || new Date().toISOString()
+        }));
+        
+        console.log('Formatted games:', formattedGames);
+        return formattedGames;
+      } catch (err) {
+        console.error('Error fetching games:', err);
+        throw err;
       }
-      const data = await response.json();
-      console.log('Fetched games from Feltrinelli API:', data);
-      return data;
     }
   });
 
@@ -35,12 +58,20 @@ export default function Games() {
     mutationFn: async (gameId: number) => {
       // Ottieni lo stato attuale del gioco
       const game = games.find(g => g.id === gameId);
-      if (!game) throw new Error('Gioco non trovato');
+      if (!game) {
+        console.error('Gioco non trovato:', gameId);
+        throw new Error('Gioco non trovato');
+      }
+      
+      console.log('Toggling game status for game:', game);
+      console.log('Current status:', game.isActive);
       
       // Usa l'endpoint Feltrinelli per aggiornare le impostazioni
-      const res = await apiRequest('PUT', `/api/feltrinelli/games/${gameId}/settings`, {
+      const res = await apiRequest('PATCH', `/api/feltrinelli/games/${gameId}/settings`, {
         is_active: !game.isActive
       });
+      
+      console.log('Toggle response:', res);
       return res;
     },
     onSuccess: () => {

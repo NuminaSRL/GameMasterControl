@@ -13,9 +13,68 @@ export class GamesController {
    */
   async getAllGames(req: Request, res: Response) {
     try {
-      const games = await gameService.getAllGames();
-      // Assicurati che il formato della risposta sia identico al vecchio endpoint
-      res.json(games);
+      console.log('[GamesController] Fetching all games');
+      
+      // Recupera tutti i giochi da flt_games
+      const { data: gamesData, error: gamesError } = await supabase
+        .from('flt_games')
+        .select('*')
+        .order('name');
+      
+      if (gamesError) {
+        console.error('[GamesController] Error fetching games:', gamesError);
+        throw gamesError;
+      }
+      
+      // Recupera tutte le impostazioni dei giochi da flt_game_settings
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('flt_game_settings')
+        .select('*');
+      
+      if (settingsError) {
+        console.error('[GamesController] Error fetching game settings:', settingsError);
+        // Non interrompiamo l'esecuzione, continuiamo con i dati dei giochi
+      }
+      
+      // Crea una mappa delle impostazioni per un accesso più veloce
+      const settingsMap = new Map();
+      if (settingsData) {
+        settingsData.forEach(setting => {
+          settingsMap.set(setting.game_id, setting);
+        });
+      }
+      
+      // Combina i dati dei giochi con le loro impostazioni
+      const formattedGames = gamesData.map(game => {
+        const settings = settingsMap.get(game.id);
+        
+        return {
+          id: game.id,
+          name: game.name,
+          description: game.description || '',
+          isActive: game.is_active,
+          imageUrl: game.image_url || '',
+          weeklyLeaderboard: game.weekly_leaderboard,
+          monthlyLeaderboard: game.monthly_leaderboard,
+          gameType: game.game_type,
+          feltrinelliGameId: game.feltrinelli_id,
+          // Valori dalle impostazioni
+          timerDuration: settings?.timer_duration ?? 30,
+          questionCount: settings?.question_count ?? 10,
+          difficulty: settings?.difficulty ?? 1,
+          // Campi aggiuntivi per compatibilità
+          settings: {
+            timerDuration: settings?.timer_duration ?? 30,
+            questionCount: settings?.question_count ?? 10,
+            difficulty: settings?.difficulty ?? 1
+          },
+          createdAt: game.created_at,
+          updatedAt: game.updated_at || settings?.updated_at
+        };
+      });
+      
+      console.log(`[GamesController] Retrieved ${formattedGames.length} games`);
+      res.json(formattedGames);
     } catch (error) {
       console.error('[GamesController] Error fetching all games:', error);
       res.status(500).json({ 
@@ -23,21 +82,55 @@ export class GamesController {
       });
     }
   }
-
-  /**
-   * Recupera un gioco specifico con le sue impostazioni
-   */
-  async getGame(req: Request, res: Response) {
-    try {
-      const game = await gameService.getGame(req.params.id);
-      res.json(game);
-    } catch (error) {
-      console.error(`[GamesController] Error fetching game with ID ${req.params.id}:`, error);
-      res.status(500).json({ 
-        message: `Error fetching game: ${error instanceof Error ? error.message : 'Unknown error'}` 
-      });
+/**
+ * Recupera un gioco specifico con le sue impostazioni
+ */
+async getGame(req: Request, res: Response) {
+  try {
+    const gameId = req.params.id;
+    
+    console.log('[GamesController] Recupero gioco:', gameId);
+    
+    // Recupera il gioco
+    const { data: game, error: gameError } = await supabase
+      .from('flt_games')
+      .select('*')
+      .eq('id', gameId)
+      .single();
+    
+    if (gameError) {
+      console.error('[GamesController] Errore recupero gioco:', gameError);
+      throw gameError;
     }
+    
+    // Recupera le impostazioni del gioco
+    const { data: settings, error: settingsError } = await supabase
+      .from('flt_game_settings')  // Cambiato da game_settings a flt_game_settings
+      .select('*')
+      .eq('game_id', gameId)
+      .maybeSingle();
+    
+    if (settingsError) {
+      console.error('[GamesController] Errore recupero impostazioni gioco:', settingsError);
+      // Non interrompiamo l'esecuzione, continuiamo
+    }
+    
+    // Combina il gioco con le sue impostazioni e assicurati che isActive sia correttamente mappato
+    const gameWithSettings = {
+      ...game,
+      isActive: game.is_active, // Aggiungi esplicitamente isActive
+      settings: settings || {}
+    };
+    
+    console.log('[GamesController] Gioco recuperato con impostazioni:', gameWithSettings);
+    res.json(gameWithSettings);
+  } catch (error) {
+    console.error('[GamesController] Error fetching game:', error);
+    res.status(500).json({ 
+      message: `Error fetching game: ${error instanceof Error ? error.message : 'Unknown error'}` 
+    });
   }
+}
 
   /**
    * Recupera le impostazioni di un gioco
@@ -46,8 +139,59 @@ export class GamesController {
     try {
       // Supporta sia il formato /:gameId/settings che /game-settings/:gameId
       const gameId = req.params.gameId;
-      const settings = await gameService.getGameSettings(gameId);
-      res.json(settings);
+      
+      console.log(`[GamesController] Fetching settings for game ${gameId}`);
+      
+      // Recupera le informazioni del gioco da flt_games
+      const { data: gameData, error: gameError } = await supabase
+        .from('flt_games')
+        .select('*')
+        .eq('id', gameId)
+        .single();
+      
+      if (gameError) {
+        console.error(`[GamesController] Error fetching game data:`, gameError);
+        throw gameError;
+      }
+      
+      // Recupera le impostazioni del gioco da flt_game_settings
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('flt_game_settings')
+        .select('*')
+        .eq('game_id', gameId)
+        .maybeSingle();
+      
+      if (settingsError) {
+        console.error(`[GamesController] Error fetching game settings:`, settingsError);
+        // Non interrompiamo l'esecuzione, continuiamo con i dati del gioco
+      }
+      
+      // Combina i dati del gioco con le impostazioni in un formato compatibile con il frontend
+      const combinedSettings = {
+        id: gameId,
+        name: gameData.name,
+        description: gameData.description || '',
+        isActive: gameData.is_active,
+        weeklyLeaderboard: gameData.weekly_leaderboard,
+        monthlyLeaderboard: gameData.monthly_leaderboard,
+        gameType: gameData.game_type,
+        feltrinelliGameId: gameData.feltrinelli_id,
+        // Valori dalle impostazioni
+        timerDuration: settingsData?.timer_duration ?? 30,
+        questionCount: settingsData?.question_count ?? 10,
+        difficulty: settingsData?.difficulty ?? 1,
+        // Campi aggiuntivi per compatibilità
+        settings: {
+          timerDuration: settingsData?.timer_duration ?? 30,
+          questionCount: settingsData?.question_count ?? 10,
+          difficulty: settingsData?.difficulty ?? 1
+        },
+        createdAt: gameData.created_at,
+        updatedAt: gameData.updated_at || settingsData?.updated_at
+      };
+      
+      console.log(`[GamesController] Game settings retrieved:`, combinedSettings);
+      res.json(combinedSettings);
     } catch (error) {
       console.error(`[GamesController] Error fetching settings for game ${req.params.gameId}:`, error);
       res.status(500).json({ 
@@ -61,7 +205,23 @@ export class GamesController {
    */
   async getGameBadges(req: Request, res: Response) {
     try {
-      const badges = await gameService.getGameBadges(req.params.gameId);
+      const gameId = req.params.gameId;
+      
+      console.log('[GamesController] Recupero badge per il gioco:', gameId);
+      
+      // Recupera i badge associati al gioco
+      const { data: badges, error } = await supabase
+        .from('flt_badges')
+        .select('*')
+        .eq('game_id', gameId)
+        .order('points', { ascending: false });
+      
+      if (error) {
+        console.error('[GamesController] Errore recupero badge:', error);
+        throw error;
+      }
+      
+      console.log('[GamesController] Badge recuperati:', badges);
       res.json(badges);
     } catch (error) {
       console.error(`[GamesController] Error fetching badges for game ${req.params.gameId}:`, error);
@@ -83,32 +243,79 @@ export class GamesController {
       
       console.log('[FeltrinelliRouter] Fetching rewards for game:', {
         gameId,
+        leaderboardType,
         paramType: typeof gameId
       });
       
-      // Ottieni tutti i premi associati al gioco
-      const query = `
-        SELECT r.*, rg.leaderboard_type as "leaderboardType", rg.position
-        FROM flt_rewards r
-        JOIN reward_games rg ON r.id = rg.reward_id
-        WHERE rg.game_id = $1::uuid
-        ${leaderboardType ? 'AND rg.leaderboard_type = $2' : ''}
-        ORDER BY rg.position, r.points DESC
-      `;
+      // Utilizziamo l'API di Supabase invece di SQL raw
+      // Primo passo: otteniamo tutti i record di reward_games per questo gioco
+      let rewardGamesQuery = supabase
+        .from('reward_games')
+        .select('*')
+        .eq('game_id', gameId);
       
-      const params = leaderboardType ? [gameId, leaderboardType] : [gameId];
+      if (leaderboardType) {
+        rewardGamesQuery = rewardGamesQuery.eq('leaderboard_type', leaderboardType);
+      }
       
-      const result = await db.execute(query, params);
+      rewardGamesQuery = rewardGamesQuery.order('position', { ascending: true });
       
-      res.json(result.rows);
+      const { data: rewardGamesData, error: rewardGamesError } = await rewardGamesQuery;
+      
+      if (rewardGamesError) {
+        console.error('[FeltrinelliRouter] Errore query reward_games:', rewardGamesError);
+        throw rewardGamesError;
+      }
+      
+      if (!rewardGamesData || rewardGamesData.length === 0) {
+        console.log('[FeltrinelliRouter] Nessun premio associato al gioco');
+        return res.json([]);
+      }
+      
+      // Secondo passo: otteniamo i dettagli di tutti i premi
+      const rewardIds = rewardGamesData.map(rg => rg.reward_id);
+      
+      const { data: rewardsData, error: rewardsError } = await supabase
+        .from('flt_rewards')
+        .select('*')
+        .in('id', rewardIds);
+      
+      if (rewardsError) {
+        console.error('[FeltrinelliRouter] Errore query flt_rewards:', rewardsError);
+        throw rewardsError;
+      }
+      
+      // Combiniamo i dati
+      const formattedRewards = rewardGamesData.map(rg => {
+        const reward = rewardsData.find(r => r.id === rg.reward_id);
+        if (!reward) return null;
+        
+        return {
+          id: reward.id,
+          name: reward.name,
+          description: reward.description,
+          points: reward.points,
+          isActive: reward.is_active,
+          imageUrl: reward.image_url,
+          type: reward.type,
+          value: reward.value,
+          icon: reward.icon,
+          color: reward.color,
+          position: rg.position,
+          leaderboardType: rg.leaderboard_type
+        };
+      }).filter(Boolean); // Rimuove eventuali null
+      
+      res.json(formattedRewards);
     } catch (error) {
       console.error('[FeltrinelliRouter] Error fetching rewards for game:', error);
       res.status(500).json({ 
-        message: `Error fetching rewards for game: ${error instanceof Error ? error.message : 'Unknown error'}` 
+        error: 'Error fetching rewards for game',
+        message: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   }
-  
+
   /**
    * Associa un premio a un gioco
    */
@@ -131,38 +338,68 @@ export class GamesController {
         });
       }
       
-      // Controlla se l'associazione esiste già
-      const checkQuery = `
-        SELECT * FROM reward_games
-        WHERE game_id = $1::uuid AND reward_id = $2::integer AND leaderboard_type = $3
-      `;
+      // Verifica se l'associazione esiste già
+      const { data: existingData, error: checkError } = await supabase
+        .from('reward_games')
+        .select('*')
+        .eq('game_id', gameId)
+        .eq('reward_id', rewardId)
+        .eq('leaderboard_type', leaderboardType)
+        .maybeSingle();
       
-      const checkResult = await db.execute(checkQuery, [gameId, rewardId, leaderboardType]);
+      if (checkError) {
+        console.error('[FeltrinelliRouter] Errore verifica associazione esistente:', checkError);
+        throw checkError;
+      }
       
-      if (checkResult.rowCount > 0) {
+      let result;
+      
+      if (existingData) {
         // Aggiorna l'associazione esistente
-        const updateQuery = `
-          UPDATE reward_games
-          SET position = $1, updated_at = NOW()
-          WHERE game_id = $2::uuid AND reward_id = $3::integer AND leaderboard_type = $4
-          RETURNING *
-        `;
+        const { data: updateData, error: updateError } = await supabase
+          .from('reward_games')
+          .update({ 
+            position: position,
+            updated_at: new Date().toISOString()
+          })
+          .eq('game_id', gameId)
+          .eq('reward_id', rewardId)
+          .eq('leaderboard_type', leaderboardType)
+          .select()
+          .single();
         
-        const updateResult = await db.execute(updateQuery, [position, gameId, rewardId, leaderboardType]);
+        if (updateError) {
+          console.error('[FeltrinelliRouter] Errore aggiornamento associazione:', updateError);
+          throw updateError;
+        }
         
-        res.json(updateResult.rows[0]);
+        result = updateData;
       } else {
         // Crea una nuova associazione
-        const insertQuery = `
-          INSERT INTO reward_games (game_id, reward_id, leaderboard_type, position)
-          VALUES ($1::uuid, $2::integer, $3, $4)
-          RETURNING *
-        `;
+        const now = new Date().toISOString();
         
-        const insertResult = await db.execute(insertQuery, [gameId, rewardId, leaderboardType, position]);
+        const { data: insertData, error: insertError } = await supabase
+          .from('reward_games')
+          .insert({
+            game_id: gameId,
+            reward_id: rewardId,
+            leaderboard_type: leaderboardType,
+            position: position,
+            created_at: now,
+            updated_at: now
+          })
+          .select()
+          .single();
         
-        res.status(201).json(insertResult.rows[0]);
+        if (insertError) {
+          console.error('[FeltrinelliRouter] Errore creazione associazione:', insertError);
+          throw insertError;
+        }
+        
+        result = insertData;
       }
+      
+      res.status(existingData ? 200 : 201).json(result);
     } catch (error) {
       console.error('[FeltrinelliRouter] Error associating reward with game:', error);
       res.status(500).json({ 
@@ -170,7 +407,7 @@ export class GamesController {
       });
     }
   }
-  
+
   /**
    * Rimuove un premio da un gioco
    */
@@ -185,19 +422,23 @@ export class GamesController {
         leaderboardType
       });
       
-      let query = `
-        DELETE FROM reward_games
-        WHERE game_id = $1::uuid AND reward_id = $2::integer
-      `;
+      let query = supabase
+        .from('reward_games')
+        .delete();
       
-      const params: any[] = [gameId, rewardId];
+      query = query.eq('game_id', gameId);
+      query = query.eq('reward_id', rewardId);
       
       if (leaderboardType) {
-        query += ' AND leaderboard_type = $3';
-        params.push(leaderboardType);
+        query = query.eq('leaderboard_type', leaderboardType);
       }
       
-      await db.execute(query, params);
+      const { error } = await query;
+      
+      if (error) {
+        console.error('[FeltrinelliRouter] Errore rimozione associazione:', error);
+        throw error;
+      }
       
       res.status(204).send();
     } catch (error) {
@@ -209,47 +450,27 @@ export class GamesController {
   }
 
   /**
-   * Aggiorna le impostazioni di un gioco specifico
+   * Aggiorna le impostazioni di un gioco
    */
   async updateGameSettings(req: Request, res: Response) {
     try {
-      const { id } = req.params;
+      const gameId = req.params.id || req.params.gameId;
       const settings = req.body;
       
-      console.log(`[GamesController] Updating settings for Feltrinelli game ${id}:`, settings);
+      console.log('[GamesController] Aggiornamento impostazioni gioco:', {
+        gameId,
+        settings
+      });
       
-      // Verifica che i campi necessari siano presenti
-      if (!settings.timer_duration && settings.timer_duration !== 0) {
-        console.warn(`[GamesController] Missing timer_duration field for game ${id}`);
-        return res.status(400).json({ 
-          message: 'Missing required settings field: timer_duration'
-        });
-      }
+      // Utilizziamo il servizio per aggiornare le impostazioni
+      const updatedSettings = await gameService.updateGameSettings(gameId, settings);
       
-      // Aggiorna le impostazioni nella tabella flt_game_settings
-      const { data, error } = await supabase
-        .from('flt_game_settings')
-        .upsert({
-          game_id: id,
-          timer_duration: settings.timer_duration,
-          question_count: settings.question_count || 10,
-          difficulty: settings.difficulty || 1,
-          updated_at: new Date()
-        })
-        .select()
-        .single();
-      
-      if (error) {
-        console.error(`[GamesController] Error updating settings in database:`, error);
-        throw error;
-      }
-      
-      console.log(`[GamesController] Settings updated successfully:`, data);
-      res.json(data);
+      console.log('[GamesController] Impostazioni aggiornate con successo:', updatedSettings);
+      res.json(updatedSettings);
     } catch (error) {
       console.error('[GamesController] Error updating game settings:', error);
       res.status(500).json({ 
-        message: `Error updating game settings: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: `Error updating game settings: ${error instanceof Error ? error.message : 'Unknown error'}` 
       });
     }
   }

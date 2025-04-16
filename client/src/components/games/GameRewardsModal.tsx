@@ -174,10 +174,17 @@ export default function GameRewardsModal({ isOpen, onClose, game }: GameRewardsM
         
         console.log('New associations to save:', newAssociations);
         
-        // Per semplicità, cancelliamo tutte le associazioni e poi ricreamolee
-        // Questo approccio sarà più robusto rispetto a cercare di trovare le differenze
+        // Prima rimuoviamo tutte le associazioni esistenti
+        await apiRequest('DELETE', `/api/feltrinelli/games/${game.id}/rewards`);
         
-        // Simuliamo il completamento dell'operazione con successo
+        // Poi creiamo le nuove associazioni
+        for (const assoc of newAssociations) {
+          await apiRequest('POST', `/api/feltrinelli/games/${game.id}/rewards/${assoc.rewardId}`, {
+            leaderboardType: assoc.leaderboardType,
+            position: assoc.position
+          });
+        }
+        
         return true;
       } catch (error) {
         console.error("Error saving reward associations:", error);

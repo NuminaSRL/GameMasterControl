@@ -1,3 +1,4 @@
+
 // Se il file non esiste, crealo
 export const config = {
   // Altri parametri di configurazione...
