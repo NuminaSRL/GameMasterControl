@@ -18,7 +18,18 @@ export class GamesController {
       // Recupera tutti i giochi da flt_games
       const { data: gamesData, error: gamesError } = await supabase
         .from('flt_games')
-        .select('*')
+        .select(`
+          *,
+          settings:flt_game_settings (
+            timer_duration,
+            question_count,
+            difficulty,
+            weekly_leaderboard,
+            monthly_leaderboard,
+            game_type,
+            updated_at
+          )
+        `)
         .order('name');
       
       if (gamesError) {
@@ -26,27 +37,10 @@ export class GamesController {
         throw gamesError;
       }
       
-      // Recupera tutte le impostazioni dei giochi da flt_game_settings
-      const { data: settingsData, error: settingsError } = await supabase
-        .from('flt_game_settings')
-        .select('*');
-      
-      if (settingsError) {
-        console.error('[GamesController] Error fetching game settings:', settingsError);
-        // Non interrompiamo l'esecuzione, continuiamo con i dati dei giochi
-      }
-      
-      // Crea una mappa delle impostazioni per un accesso più veloce
-      const settingsMap = new Map();
-      if (settingsData) {
-        settingsData.forEach(setting => {
-          settingsMap.set(setting.game_id, setting);
-        });
-      }
-      
       // Combina i dati dei giochi con le loro impostazioni
       const formattedGames = gamesData.map(game => {
-        const settings = settingsMap.get(game.id);
+        const settings = Array.isArray(game.settings) ? game.settings[0] : game.settings;
+        console.log(`[GamesController] Processing game ${game.id} (${game.name}), settings:`, settings);
         
         return {
           id: game.id,
@@ -54,9 +48,10 @@ export class GamesController {
           description: game.description || '',
           isActive: game.is_active,
           imageUrl: game.image_url || '',
-          weeklyLeaderboard: game.weekly_leaderboard,
-          monthlyLeaderboard: game.monthly_leaderboard,
-          gameType: game.game_type,
+          // Prendi questi valori da settings invece che da game
+          weeklyLeaderboard: settings?.weekly_leaderboard ?? false,
+          monthlyLeaderboard: settings?.monthly_leaderboard ?? false,
+          gameType: settings?.game_type || 'books',
           feltrinelliGameId: game.feltrinelli_id,
           // Valori dalle impostazioni
           timerDuration: settings?.timer_duration ?? 30,
@@ -66,7 +61,10 @@ export class GamesController {
           settings: {
             timerDuration: settings?.timer_duration ?? 30,
             questionCount: settings?.question_count ?? 10,
-            difficulty: settings?.difficulty ?? 1
+            difficulty: settings?.difficulty ?? 1,
+            weeklyLeaderboard: settings?.weekly_leaderboard ?? false,
+            monthlyLeaderboard: settings?.monthly_leaderboard ?? false,
+            gameType: settings?.game_type || 'books'
           },
           createdAt: game.created_at,
           updatedAt: game.updated_at || settings?.updated_at
@@ -74,6 +72,7 @@ export class GamesController {
       });
       
       console.log(`[GamesController] Retrieved ${formattedGames.length} games`);
+      console.log('[GamesController] First game data:', formattedGames[0]);
       res.json(formattedGames);
     } catch (error) {
       console.error('[GamesController] Error fetching all games:', error);
@@ -82,6 +81,7 @@ export class GamesController {
       });
     }
   }
+
 /**
  * Recupera un gioco specifico con le sue impostazioni
  */
@@ -91,10 +91,21 @@ async getGame(req: Request, res: Response) {
     
     console.log('[GamesController] Recupero gioco:', gameId);
     
-    // Recupera il gioco
+    // Recupera il gioco con le impostazioni in un'unica query
     const { data: game, error: gameError } = await supabase
       .from('flt_games')
-      .select('*')
+      .select(`
+        *,
+        settings:flt_game_settings (
+          timer_duration,
+          question_count,
+          difficulty,
+          weekly_leaderboard,
+          monthly_leaderboard,
+          game_type,
+          updated_at
+        )
+      `)
       .eq('id', gameId)
       .single();
     
@@ -103,23 +114,36 @@ async getGame(req: Request, res: Response) {
       throw gameError;
     }
     
-    // Recupera le impostazioni del gioco
-    const { data: settings, error: settingsError } = await supabase
-      .from('flt_game_settings')  // Cambiato da game_settings a flt_game_settings
-      .select('*')
-      .eq('game_id', gameId)
-      .maybeSingle();
+    // Estrai le impostazioni
+    const settings = Array.isArray(game.settings) ? game.settings[0] : game.settings;
     
-    if (settingsError) {
-      console.error('[GamesController] Errore recupero impostazioni gioco:', settingsError);
-      // Non interrompiamo l'esecuzione, continuiamo
-    }
-    
-    // Combina il gioco con le sue impostazioni e assicurati che isActive sia correttamente mappato
+    // Combina il gioco con le sue impostazioni
     const gameWithSettings = {
-      ...game,
-      isActive: game.is_active, // Aggiungi esplicitamente isActive
-      settings: settings || {}
+      id: game.id,
+      name: game.name,
+      description: game.description || '',
+      isActive: game.is_active,
+      imageUrl: game.image_url || '',
+      // Prendi questi valori da settings invece che da game
+      weeklyLeaderboard: settings?.weekly_leaderboard ?? false,
+      monthlyLeaderboard: settings?.monthly_leaderboard ?? false,
+      gameType: settings?.game_type || 'books',
+      feltrinelliGameId: game.feltrinelli_id,
+      // Valori dalle impostazioni
+      timerDuration: settings?.timer_duration ?? 30,
+      questionCount: settings?.question_count ?? 10,
+      difficulty: settings?.difficulty ?? 1,
+      // Campi aggiuntivi per compatibilità
+      settings: {
+        timerDuration: settings?.timer_duration ?? 30,
+        questionCount: settings?.question_count ?? 10,
+        difficulty: settings?.difficulty ?? 1,
+        weeklyLeaderboard: settings?.weekly_leaderboard ?? false,
+        monthlyLeaderboard: settings?.monthly_leaderboard ?? false,
+        gameType: settings?.game_type || 'books'
+      },
+      createdAt: game.created_at,
+      updatedAt: game.updated_at || settings?.updated_at
     };
     
     console.log('[GamesController] Gioco recuperato con impostazioni:', gameWithSettings);
@@ -172,9 +196,10 @@ async getGame(req: Request, res: Response) {
         name: gameData.name,
         description: gameData.description || '',
         isActive: gameData.is_active,
-        weeklyLeaderboard: gameData.weekly_leaderboard,
-        monthlyLeaderboard: gameData.monthly_leaderboard,
-        gameType: gameData.game_type,
+        // Prendi questi valori da settingsData invece che da gameData
+        weeklyLeaderboard: settingsData?.weekly_leaderboard ?? false,
+        monthlyLeaderboard: settingsData?.monthly_leaderboard ?? false,
+        gameType: settingsData?.game_type || 'books',
         feltrinelliGameId: gameData.feltrinelli_id,
         // Valori dalle impostazioni
         timerDuration: settingsData?.timer_duration ?? 30,
@@ -184,7 +209,10 @@ async getGame(req: Request, res: Response) {
         settings: {
           timerDuration: settingsData?.timer_duration ?? 30,
           questionCount: settingsData?.question_count ?? 10,
-          difficulty: settingsData?.difficulty ?? 1
+          difficulty: settingsData?.difficulty ?? 1,
+          weeklyLeaderboard: settingsData?.weekly_leaderboard ?? false,
+          monthlyLeaderboard: settingsData?.monthly_leaderboard ?? false,
+          gameType: settingsData?.game_type || 'books'
         },
         createdAt: gameData.created_at,
         updatedAt: gameData.updated_at || settingsData?.updated_at
@@ -457,15 +485,35 @@ async getGame(req: Request, res: Response) {
       const gameId = req.params.id || req.params.gameId;
       const settings = req.body;
       
-      console.log('[GamesController] Aggiornamento impostazioni gioco:', {
+      console.log('[GamesController] Aggiornamento impostazioni gioco - Dati ricevuti:', {
         gameId,
         settings
       });
       
+      // Verifica che i valori numerici siano effettivamente numeri
+      if (settings.timer_duration) {
+        settings.timer_duration = Number(settings.timer_duration);
+      }
+      if (settings.question_count) {
+        settings.question_count = Number(settings.question_count);
+      }
+      if (settings.difficulty) {
+        settings.difficulty = Number(settings.difficulty);
+      }
+      
       // Utilizziamo il servizio per aggiornare le impostazioni
       const updatedSettings = await gameService.updateGameSettings(gameId, settings);
       
-      console.log('[GamesController] Impostazioni aggiornate con successo:', updatedSettings);
+      console.log('[GamesController] Impostazioni aggiornate con successo - Risposta:', updatedSettings);
+      
+      // Verifica che i valori restituiti corrispondano a quelli inviati
+      if (settings.timer_duration && updatedSettings.timerDuration !== settings.timer_duration) {
+        console.warn('[GamesController] Attenzione: timerDuration restituito diverso da quello inviato', {
+          inviato: settings.timer_duration,
+          restituito: updatedSettings.timerDuration
+        });
+      }
+      
       res.json(updatedSettings);
     } catch (error) {
       console.error('[GamesController] Error updating game settings:', error);

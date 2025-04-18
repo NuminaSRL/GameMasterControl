@@ -143,15 +143,30 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
       if (isEditing && game) {
         console.log('Updating existing game:', game.id);
         console.log('Game object:', game);
+
+        const apiData = {
+          name: gameData.name,
+          description: gameData.description,
+          isActive: gameData.isActive, // Già booleano dal form
+          weeklyLeaderboard: gameData.weeklyLeaderboard, // Già booleano dal form
+          monthlyLeaderboard: gameData.monthlyLeaderboard, // Già booleano dal form
+          gameType: gameData.gameType,
+          feltrinelliGameId: gameData.feltrinelliGameId, // Assicurati che sia l'ID corretto
+          timerDuration: gameData.timerDuration, // Già numero dal form
+          questionCount: gameData.questionCount, // Già numero dal form
+          difficulty: gameData.difficulty, // Già numero dal form
+        };
+
+        console.log('Data being sent to PUT /api/feltrinelli/games/:id/settings:', apiData);
         
         // Prepara i dati nel formato corretto per l'API Feltrinelli
         const feltrinelliData = {
-          timer_duration: gameData.timerDuration,
-          question_count: gameData.questionCount,
-          difficulty: gameData.difficulty,
-          is_active: gameData.isActive,
-          weekly_leaderboard: gameData.weeklyLeaderboard,
-          monthly_leaderboard: gameData.monthlyLeaderboard,
+          timer_duration: Number(gameData.timerDuration),
+          question_count: Number(gameData.questionCount),
+          difficulty: Number(gameData.difficulty),
+          is_active: Boolean(gameData.isActive),
+          weekly_leaderboard: Boolean(gameData.weeklyLeaderboard),
+          monthly_leaderboard: Boolean(gameData.monthlyLeaderboard),
           game_type: gameData.gameType,
           // Aggiungi esplicitamente l'ID Feltrinelli
           feltrinelli_id: gameData.feltrinelliGameId,
@@ -162,6 +177,14 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
         
         console.log('Sending data to Feltrinelli API:', feltrinelliData);
         console.log('Game ID for API call:', game.id);
+        console.log('Data types:', {
+          timer_duration: typeof feltrinelliData.timer_duration,
+          question_count: typeof feltrinelliData.question_count,
+          difficulty: typeof feltrinelliData.difficulty,
+          is_active: typeof feltrinelliData.is_active,
+          weekly_leaderboard: typeof feltrinelliData.weekly_leaderboard,
+          monthly_leaderboard: typeof feltrinelliData.monthly_leaderboard
+        });
         
         // Utilizza direttamente apiRequest invece di updateFeltrinelliGameSettings
         const updatedGame = await apiRequest(
@@ -238,6 +261,12 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
       
       queryClient.invalidateQueries({ queryKey: ['/api/feltrinelli/games'] });
       console.log('Invalidated /api/feltrinelli/games');
+      
+      // Aggiungi invalidazione specifica per i settings
+      if (game?.id) {
+        queryClient.invalidateQueries({ queryKey: [`/api/feltrinelli/games/${game.id}/settings`] });
+        console.log(`Invalidated /api/feltrinelli/games/${game.id}/settings`);
+      }
       
       queryClient.invalidateQueries({ queryKey: [`/api/feltrinelli/game-settings/${game?.id}`] });
       console.log(`Invalidated /api/feltrinelli/game-settings/${game?.id}`);

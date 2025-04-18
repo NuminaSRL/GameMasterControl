@@ -22,35 +22,40 @@ export default function Games() {
     queryFn: async () => {
       try {
         console.log('Fetching games from Feltrinelli API');
-        const response = await fetch('/api/feltrinelli/games');
-        
-        if (!response.ok) {
-          console.error('API response not OK:', response.status, response.statusText);
-          throw new Error(`Network response was not ok: ${response.status}`);
-        }
-        
-        const data = await response.json();
+        // Usa apiRequest per coerenza e gestione errori centralizzata
+        const data = await apiRequest('GET', '/api/feltrinelli/games');
         console.log('Raw data from Feltrinelli API:', data);
-        
-        // Assicuriamoci che i campi siano mappati correttamente
-        const formattedGames = data.map((game: any) => ({
-          id: game.id,
-          name: game.name,
-          description: game.description || '',
-          isActive: game.is_active || game.isActive || false,
-          imageUrl: game.image_url || game.imageUrl || '',
-          settings: game.settings || {},
-          createdAt: game.created_at || game.createdAt || new Date().toISOString(),
-          updatedAt: game.updated_at || game.updatedAt || new Date().toISOString()
-        }));
-        
-        console.log('Formatted games:', formattedGames);
-        return formattedGames;
+
+        // Se il backend formatta già i dati, il mapping qui potrebbe non essere necessario
+        // o può essere molto più semplice. Assumiamo che il backend restituisca
+        // già i campi con i nomi attesi dal tipo 'Game'.
+        if (!Array.isArray(data)) {
+           console.error("Received non-array data from /api/feltrinelli/games", data);
+           throw new Error("Invalid data format received from server");
+        }
+
+        // Verifica che i campi necessari esistano, aggiungi log se mancano
+        data.forEach((game: any, index: number) => {
+          if (game.timerDuration === undefined || game.weeklyLeaderboard === undefined || game.monthlyLeaderboard === undefined) {
+            console.warn(`Game at index ${index} (ID: ${game.id}) might be missing expected fields:`, game);
+          }
+        });
+
+        return data as Game[]; // Fai il cast al tipo Game
+
       } catch (err) {
         console.error('Error fetching games:', err);
-        throw err;
+        toast({
+          title: "Errore nel Caricamento",
+          description: `Impossibile caricare i giochi: ${err instanceof Error ? err.message : 'Errore sconosciuto'}`,
+          variant: "destructive",
+        });
+        return []; // Restituisci array vuoto in caso di errore
       }
-    }
+    },
+    // Aggiungi opzioni per refetch o stale time se necessario
+    // refetchOnWindowFocus: false,
+    // staleTime: 5 * 60 * 1000, // 5 minuti
   });
 
   // Toggle game status mutation
@@ -67,8 +72,18 @@ export default function Games() {
       console.log('Current status:', game.isActive);
       
       // Usa l'endpoint Feltrinelli per aggiornare le impostazioni
-      const res = await apiRequest('PATCH', `/api/feltrinelli/games/${gameId}/settings`, {
-        is_active: !game.isActive
+      // Assicurati di inviare tutti i campi necessari, non solo is_active
+      const res = await apiRequest('PUT', `/api/feltrinelli/games/${gameId}/settings`, {
+        name: game.name,
+        description: game.description,
+        isActive: !game.isActive,
+        weeklyLeaderboard: game.weeklyLeaderboard,
+        monthlyLeaderboard: game.monthlyLeaderboard,
+        gameType: game.gameType,
+        feltrinelliGameId: game.feltrinelliGameId,
+        timerDuration: game.timerDuration || 30,
+        questionCount: game.questionCount || 10,
+        difficulty: game.difficulty || 1
       });
       
       console.log('Toggle response:', res);
