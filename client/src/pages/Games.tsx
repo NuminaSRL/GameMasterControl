@@ -140,9 +140,24 @@ export default function Games() {
   
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Rimuoviamo questo titolo duplicato */}
+      {/* <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold">Gestione Giochi</h2>
-        <Button onClick={handleCreateGame}>
+        <Button 
+          onClick={handleCreateGame}
+          className="bg-blue-500 hover:bg-blue-600"
+        >
+          <i className="fas fa-plus mr-2"></i>
+          Nuovo Gioco
+        </Button>
+      </div> */}
+      
+      {/* Manteniamo solo il pulsante "Nuovo Gioco" */}
+      <div className="flex justify-end mb-6">
+        <Button 
+          onClick={handleCreateGame}
+          className="bg-blue-500 hover:bg-blue-600"
+        >
           <i className="fas fa-plus mr-2"></i>
           Nuovo Gioco
         </Button>
@@ -181,7 +196,6 @@ export default function Games() {
         onClose={handleCloseModal} 
         game={currentGame} 
       />
-      
       
       <GameRewardsModal
         isOpen={isRewardsModalOpen}

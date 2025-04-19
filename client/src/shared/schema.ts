@@ -108,7 +108,7 @@ export interface Game {
   reward: string;
   gameType: string;
   feltrinelliGameId: string;
-  difficulty: number;
+  difficulty: number | string;
   createdAt: Date;
   startDate?: string;
   endDate?: string;

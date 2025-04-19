@@ -1,7 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
-export default function Header() {
+interface HeaderProps {
+  onToggleSidebar?: () => void;
+  sidebarCollapsed?: boolean;
+}
+
+export default function Header({ onToggleSidebar, sidebarCollapsed }: HeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [clientLogo, setClientLogo] = useState<string | null>(null);
@@ -41,17 +46,16 @@ export default function Header() {
   return (
     <header className="bg-white shadow-sm">
       <div className="flex justify-between items-center py-4 px-6 border-b border-gray-200">
-        <div className="flex md:hidden">
-          <button
-            type="button"
-            className="text-gray-500 hover:text-gray-600 focus:outline-none"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          >
-            <i className="fas fa-bars"></i>
-          </button>
-        </div>
-        
         <div className="flex items-center">
+          {onToggleSidebar && (
+            <button
+              type="button"
+              className="text-gray-500 hover:text-gray-600 focus:outline-none mr-4 transition-colors"
+              onClick={onToggleSidebar}
+            >
+              <i className="fas fa-bars text-lg"></i>
+            </button>
+          )}
           <h1 className="text-xl font-semibold text-gray-800">Gestione Giochi</h1>
           {clientLogo && (
             <div className="ml-4">

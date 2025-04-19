@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useState } from 'react';
 import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -22,17 +23,22 @@ import LoadingScreen from "@/components/ui/LoadingScreen";
 // Protected app content with layout
 function ProtectedAppContent() {
   const [location] = useLocation();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
   // Aggiungiamo log per debug
   React.useEffect(() => {
     console.log('ProtectedAppContent - Current location:', location);
   }, [location]);
 
+  const toggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
+
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <Header />
+      <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+      <div className={`flex flex-col flex-1 overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
+        <Header onToggleSidebar={toggleSidebar} />
         <main className="flex-1 overflow-y-auto bg-gray-100 p-6">
           <Switch>
             <Route path="/" component={Dashboard} />
