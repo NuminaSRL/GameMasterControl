@@ -21,9 +21,13 @@ interface EditGameModalProps {
   game: Game | null;
 }
 
+
+
 // Create a form schema based on the insertGameSchema
 const formSchema = insertGameSchema.extend({
   badges: z.array(z.number()).optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
 }).omit({ reward: true }); // Rimuovi la proprietà reward dallo schema
 
 type FormValues = z.infer<typeof formSchema>;
@@ -63,6 +67,8 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
     gameType: (game?.gameType as "books" | "authors" | "years") || 'books',
     feltrinelliGameId: game?.feltrinelliGameId || '00000000-0000-0000-0000-000000000001',
     difficulty: game?.difficulty || 1,
+    startDate: game?.startDate || '',
+    endDate: game?.endDate || '',
   };
 
   // Create form
@@ -101,9 +107,54 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
     }
   }, [isOpen, toast, form, isEditing]);
 
+    // Aggiungi questo useEffect per verificare il formato delle date
+    useEffect(() => {
+      if (game?.startDate || game?.endDate) {
+        console.log('Date formats:', {
+          startDate: {
+            original: game.startDate,
+            parsed: game.startDate ? new Date(game.startDate) : null,
+            formatted: game.startDate ? new Date(game.startDate).toISOString() : null
+          },
+          endDate: {
+            original: game.endDate,
+            parsed: game.endDate ? new Date(game.endDate) : null,
+            formatted: game.endDate ? new Date(game.endDate).toISOString() : null
+          }
+        });
+      }
+    }, [game]);
+
   // Reset form when game changes
   useEffect(() => {
     if (isOpen) {
+      console.log('Resetting form with game data:', {
+        game,
+        startDate: game?.startDate,
+        endDate: game?.endDate
+      });
+      
+      // Format dates for datetime-local input (remove timezone part)
+      let formattedStartDate = '';
+      let formattedEndDate = '';
+      
+      if (game?.startDate) {
+        // Convert to Date object and format to local datetime string
+        const startDate = new Date(game.startDate);
+        formattedStartDate = startDate.toISOString().slice(0, 16); // Format: YYYY-MM-DDThh:mm
+      }
+      
+      if (game?.endDate) {
+        // Convert to Date object and format to local datetime string
+        const endDate = new Date(game.endDate);
+        formattedEndDate = endDate.toISOString().slice(0, 16); // Format: YYYY-MM-DDThh:mm
+      }
+      
+      console.log('Formatted dates for form:', {
+        original: { start: game?.startDate, end: game?.endDate },
+        formatted: { start: formattedStartDate, end: formattedEndDate }
+      });
+      
       form.reset({
         name: game?.name || '',
         description: game?.description || '',
@@ -117,7 +168,12 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
         feltrinelliGameId: game?.feltrinelliGameId || '00000000-0000-0000-0000-000000000001',
         difficulty: game?.difficulty || 1,
         badges: gameBadges.map(badge => badge.id),
+        startDate: formattedStartDate,
+        endDate: formattedEndDate,
       });
+      
+      // Verifica i valori dopo il reset
+      console.log('Form values after reset:', form.getValues());
     }
   }, [isOpen, game, gameBadges, form]);
   
@@ -155,25 +211,40 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
           timerDuration: gameData.timerDuration, // Già numero dal form
           questionCount: gameData.questionCount, // Già numero dal form
           difficulty: gameData.difficulty, // Già numero dal form
+          startDate: gameData.startDate,
+          endDate: gameData.endDate,
         };
 
         console.log('Data being sent to PUT /api/feltrinelli/games/:id/settings:', apiData);
         
         // Prepara i dati nel formato corretto per l'API Feltrinelli
         const feltrinelliData = {
+          // Campi per flt_game_settings
           timer_duration: Number(gameData.timerDuration),
           question_count: Number(gameData.questionCount),
           difficulty: Number(gameData.difficulty),
-          is_active: Boolean(gameData.isActive),
           weekly_leaderboard: Boolean(gameData.weeklyLeaderboard),
           monthly_leaderboard: Boolean(gameData.monthlyLeaderboard),
           game_type: gameData.gameType,
-          // Aggiungi esplicitamente l'ID Feltrinelli
+          
+          // Campi per flt_games
+          is_active: Boolean(gameData.isActive),
           feltrinelli_id: gameData.feltrinelliGameId,
-          // Aggiungi name e description
           name: gameData.name,
-          description: gameData.description
+          description: gameData.description,
+          
+          // Date di inizio e fine (vanno in flt_games, non in flt_game_settings)
+          start_date: gameData.startDate ? new Date(gameData.startDate).toISOString() : null,
+          end_date: gameData.endDate ? new Date(gameData.endDate).toISOString() : null,
         };
+        
+        // Add debug logs to verify the date formatting
+        console.log('Date fields being sent:', {
+          original_start: gameData.startDate,
+          formatted_start: gameData.startDate ? new Date(gameData.startDate).toISOString() : null,
+          original_end: gameData.endDate,
+          formatted_end: gameData.endDate ? new Date(gameData.endDate).toISOString() : null
+        });
         
         console.log('Sending data to Feltrinelli API:', feltrinelliData);
         console.log('Game ID for API call:', game.id);
@@ -275,6 +346,8 @@ export default function EditGameModal({ isOpen, onClose, game }: EditGameModalPr
       console.log('Invalidated /api/stats');
       
       console.log('All queries invalidated, closing modal');
+      
+      // Chiudi la modale
       onClose();
     },
     onError: (error) => {
@@ -601,6 +674,50 @@ const deleteGameMutation = useMutation({
                 </FormItem>
               )}
             />
+
+                <FormField
+                  control={form.control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        <i className="fas fa-calendar-alt mr-1.5 text-gray-500"></i>
+                        Data di Inizio
+                      </FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="datetime-local" 
+                          {...field} 
+                          placeholder="Data di inizio"
+                          className="font-medium"
+                        />
+                      </FormControl>
+                      <FormDescription>Quando il gioco sarà disponibile</FormDescription>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="endDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        <i className="fas fa-calendar-check mr-1.5 text-gray-500"></i>
+                        Data di Fine
+                      </FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="datetime-local" 
+                          {...field}
+                          placeholder="Data di fine"
+                          className="font-medium"
+                        />
+                      </FormControl>
+                      <FormDescription>Quando il gioco non sarà più disponibile</FormDescription>
+                    </FormItem>
+                  )}
+                />
 
             <div className="bg-gray-50 p-4 rounded-lg my-4 border">
               <FormField

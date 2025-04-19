@@ -110,6 +110,8 @@ export interface Game {
   feltrinelliGameId: string;
   difficulty: number;
   createdAt: Date;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface Badge {

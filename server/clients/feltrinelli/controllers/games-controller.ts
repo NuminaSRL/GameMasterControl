@@ -42,6 +42,12 @@ export class GamesController {
         const settings = Array.isArray(game.settings) ? game.settings[0] : game.settings;
         console.log(`[GamesController] Processing game ${game.id} (${game.name}), settings:`, settings);
         
+        // Log the date fields to debug
+        console.log(`[GamesController] Game ${game.id} date fields:`, {
+          start_date: game.start_date,
+          end_date: game.end_date
+        });
+        
         return {
           id: game.id,
           name: game.name,
@@ -57,6 +63,9 @@ export class GamesController {
           timerDuration: settings?.timer_duration ?? 30,
           questionCount: settings?.question_count ?? 10,
           difficulty: settings?.difficulty ?? 1,
+          // Aggiungi le date di inizio e fine dalla tabella flt_games
+          startDate: game.start_date || null,
+          endDate: game.end_date || null,
           // Campi aggiuntivi per compatibilità
           settings: {
             timerDuration: settings?.timer_duration ?? 30,
@@ -64,7 +73,10 @@ export class GamesController {
             difficulty: settings?.difficulty ?? 1,
             weeklyLeaderboard: settings?.weekly_leaderboard ?? false,
             monthlyLeaderboard: settings?.monthly_leaderboard ?? false,
-            gameType: settings?.game_type || 'books'
+            gameType: settings?.game_type || 'books',
+            // Include date fields in settings object too
+            startDate: game.start_date || null,
+            endDate: game.end_date || null
           },
           createdAt: game.created_at,
           updatedAt: game.updated_at || settings?.updated_at
@@ -72,7 +84,8 @@ export class GamesController {
       });
       
       console.log(`[GamesController] Retrieved ${formattedGames.length} games`);
-      console.log('[GamesController] First game data:', formattedGames[0]);
+      // Log the first game with all its fields to debug
+      console.log('[GamesController] First game data (complete):', JSON.stringify(formattedGames[0], null, 2));
       res.json(formattedGames);
     } catch (error) {
       console.error('[GamesController] Error fetching all games:', error);
@@ -86,75 +99,87 @@ export class GamesController {
  * Recupera un gioco specifico con le sue impostazioni
  */
 async getGame(req: Request, res: Response) {
-  try {
-    const gameId = req.params.id;
-    
-    console.log('[GamesController] Recupero gioco:', gameId);
-    
-    // Recupera il gioco con le impostazioni in un'unica query
-    const { data: game, error: gameError } = await supabase
-      .from('flt_games')
-      .select(`
-        *,
-        settings:flt_game_settings (
-          timer_duration,
-          question_count,
-          difficulty,
-          weekly_leaderboard,
-          monthly_leaderboard,
-          game_type,
-          updated_at
-        )
-      `)
-      .eq('id', gameId)
-      .single();
-    
-    if (gameError) {
-      console.error('[GamesController] Errore recupero gioco:', gameError);
-      throw gameError;
-    }
-    
-    // Estrai le impostazioni
-    const settings = Array.isArray(game.settings) ? game.settings[0] : game.settings;
-    
-    // Combina il gioco con le sue impostazioni
-    const gameWithSettings = {
-      id: game.id,
-      name: game.name,
-      description: game.description || '',
-      isActive: game.is_active,
-      imageUrl: game.image_url || '',
-      // Prendi questi valori da settings invece che da game
-      weeklyLeaderboard: settings?.weekly_leaderboard ?? false,
-      monthlyLeaderboard: settings?.monthly_leaderboard ?? false,
-      gameType: settings?.game_type || 'books',
-      feltrinelliGameId: game.feltrinelli_id,
-      // Valori dalle impostazioni
-      timerDuration: settings?.timer_duration ?? 30,
-      questionCount: settings?.question_count ?? 10,
-      difficulty: settings?.difficulty ?? 1,
-      // Campi aggiuntivi per compatibilità
-      settings: {
+    try {
+      const gameId = req.params.id;
+      
+      console.log('[GamesController] Recupero gioco:', gameId);
+      
+      // Recupera il gioco con le impostazioni in un'unica query
+      const { data: game, error: gameError } = await supabase
+        .from('flt_games')
+        .select(`
+          *,
+          settings:flt_game_settings (
+            timer_duration,
+            question_count,
+            difficulty,
+            weekly_leaderboard,
+            monthly_leaderboard,
+            game_type,
+            updated_at
+          )
+        `)
+        .eq('id', gameId)
+        .single();
+      
+      if (gameError) {
+        console.error('[GamesController] Errore recupero gioco:', gameError);
+        throw gameError;
+      }
+      
+      // Log the date fields to debug
+      console.log(`[GamesController] Game ${gameId} date fields:`, {
+        start_date: game.start_date,
+        end_date: game.end_date
+      });
+      
+      // Estrai le impostazioni
+      const settings = Array.isArray(game.settings) ? game.settings[0] : game.settings;
+      
+      // Combina il gioco con le sue impostazioni
+      const gameWithSettings = {
+        id: game.id,
+        name: game.name,
+        description: game.description || '',
+        isActive: game.is_active,
+        imageUrl: game.image_url || '',
+        // Prendi questi valori da settings invece che da game
+        weeklyLeaderboard: settings?.weekly_leaderboard ?? false,
+        monthlyLeaderboard: settings?.monthly_leaderboard ?? false,
+        gameType: settings?.game_type || 'books',
+        feltrinelliGameId: game.feltrinelli_id,
+        // Valori dalle impostazioni
         timerDuration: settings?.timer_duration ?? 30,
         questionCount: settings?.question_count ?? 10,
         difficulty: settings?.difficulty ?? 1,
-        weeklyLeaderboard: settings?.weekly_leaderboard ?? false,
-        monthlyLeaderboard: settings?.monthly_leaderboard ?? false,
-        gameType: settings?.game_type || 'books'
-      },
-      createdAt: game.created_at,
-      updatedAt: game.updated_at || settings?.updated_at
-    };
-    
-    console.log('[GamesController] Gioco recuperato con impostazioni:', gameWithSettings);
-    res.json(gameWithSettings);
-  } catch (error) {
-    console.error('[GamesController] Error fetching game:', error);
-    res.status(500).json({ 
-      message: `Error fetching game: ${error instanceof Error ? error.message : 'Unknown error'}` 
-    });
+        // Aggiungi le date di inizio e fine dalla tabella flt_games
+        startDate: game.start_date || null,
+        endDate: game.end_date || null,
+        // Campi aggiuntivi per compatibilità
+        settings: {
+          timerDuration: settings?.timer_duration ?? 30,
+          questionCount: settings?.question_count ?? 10,
+          difficulty: settings?.difficulty ?? 1,
+          weeklyLeaderboard: settings?.weekly_leaderboard ?? false,
+          monthlyLeaderboard: settings?.monthly_leaderboard ?? false,
+          gameType: settings?.game_type || 'books',
+          // Include date fields in settings object too
+          startDate: game.start_date || null,
+          endDate: game.end_date || null
+        },
+        createdAt: game.created_at,
+        updatedAt: game.updated_at || settings?.updated_at
+      };
+      
+      console.log('[GamesController] Gioco recuperato con impostazioni (complete):', JSON.stringify(gameWithSettings, null, 2));
+      res.json(gameWithSettings);
+    } catch (error) {
+      console.error('[GamesController] Error fetching game:', error);
+      res.status(500).json({ 
+        message: `Error fetching game: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    }
   }
-}
 
   /**
    * Recupera le impostazioni di un gioco
@@ -177,6 +202,12 @@ async getGame(req: Request, res: Response) {
         console.error(`[GamesController] Error fetching game data:`, gameError);
         throw gameError;
       }
+      
+      // Log the date fields to debug
+      console.log(`[GamesController] Game ${gameId} date fields:`, {
+        start_date: gameData.start_date,
+        end_date: gameData.end_date
+      });
       
       // Recupera le impostazioni del gioco da flt_game_settings
       const { data: settingsData, error: settingsError } = await supabase
@@ -205,6 +236,9 @@ async getGame(req: Request, res: Response) {
         timerDuration: settingsData?.timer_duration ?? 30,
         questionCount: settingsData?.question_count ?? 10,
         difficulty: settingsData?.difficulty ?? 1,
+        // Aggiungi le date di inizio e fine dalla tabella flt_games
+        startDate: gameData.start_date || null,
+        endDate: gameData.end_date || null,
         // Campi aggiuntivi per compatibilità
         settings: {
           timerDuration: settingsData?.timer_duration ?? 30,
@@ -212,13 +246,16 @@ async getGame(req: Request, res: Response) {
           difficulty: settingsData?.difficulty ?? 1,
           weeklyLeaderboard: settingsData?.weekly_leaderboard ?? false,
           monthlyLeaderboard: settingsData?.monthly_leaderboard ?? false,
-          gameType: settingsData?.game_type || 'books'
+          gameType: settingsData?.game_type || 'books',
+          // Include date fields in settings object too
+          startDate: gameData.start_date || null,
+          endDate: gameData.end_date || null
         },
         createdAt: gameData.created_at,
         updatedAt: gameData.updated_at || settingsData?.updated_at
       };
       
-      console.log(`[GamesController] Game settings retrieved:`, combinedSettings);
+      console.log(`[GamesController] Game settings retrieved (complete):`, JSON.stringify(combinedSettings, null, 2));
       res.json(combinedSettings);
     } catch (error) {
       console.error(`[GamesController] Error fetching settings for game ${req.params.gameId}:`, error);
@@ -501,6 +538,31 @@ async getGame(req: Request, res: Response) {
         settings.difficulty = Number(settings.difficulty);
       }
       
+      // Estrai i campi che vanno nella tabella flt_games
+      const gameFields = {
+        name: settings.name,
+        description: settings.description,
+        is_active: settings.is_active,
+        feltrinelli_id: settings.feltrinelli_id,
+        start_date: settings.start_date,
+        end_date: settings.end_date
+      };
+      
+      // Aggiorna i campi nella tabella flt_games
+      if (Object.keys(gameFields).some(key => gameFields[key as keyof typeof gameFields] !== undefined)) {
+        console.log('[GamesController] Aggiornamento campi nella tabella flt_games:', gameFields);
+        
+        const { error: gameUpdateError } = await supabase
+          .from('flt_games')
+          .update(gameFields)
+          .eq('id', gameId);
+        
+        if (gameUpdateError) {
+          console.error('[GamesController] Errore aggiornamento flt_games:', gameUpdateError);
+          throw gameUpdateError;
+        }
+      }
+      
       // Utilizziamo il servizio per aggiornare le impostazioni
       const updatedSettings = await gameService.updateGameSettings(gameId, settings);
       
@@ -512,6 +574,14 @@ async getGame(req: Request, res: Response) {
           inviato: settings.timer_duration,
           restituito: updatedSettings.timerDuration
         });
+      }
+      
+      // Aggiungi le date alla risposta
+      if (settings.start_date) {
+        updatedSettings.startDate = settings.start_date;
+      }
+      if (settings.end_date) {
+        updatedSettings.endDate = settings.end_date;
       }
       
       res.json(updatedSettings);
