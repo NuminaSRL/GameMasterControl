@@ -120,6 +120,7 @@ export interface Badge {
   description: string;
   icon: string;
   color: string;
+  game_id: number;
   createdAt: Date;
 }
 
@@ -141,10 +142,13 @@ export interface Reward {
   startDate?: string | null;
   endDate?: string | null;
   rank?: number;
+  leaderboardType?: string;
   icon?: string;
   color?: string;
   createdAt: string;
   updatedAt: string;
+  game_id: number;
+  
 }
 
 export interface FltGame {

@@ -50,15 +50,24 @@ export default function GameRewardsModal({ isOpen, onClose, game }: GameRewardsM
 
   // Fetch rewards - torniamo all'endpoint corretto per il recupero dei premi
   const { data: rewards = [], isLoading: isLoadingRewards } = useQuery<Reward[]>({
-    queryKey: ['/api/feltrinelli/rewards'],
+    queryKey: ['/api/feltrinelli/rewards', isOpen],
+    queryFn: async () => {
+      const timestamp = new Date().getTime();
+      return apiRequest('GET', `/api/feltrinelli/rewards?_t=${timestamp}`);
+    },
     enabled: isOpen,
+    staleTime: 0, // Non usare la cache
+    refetchOnWindowFocus: true, // Ricarica quando la finestra ottiene il focus
   });
   
   // Carica le associazioni esistenti quando si apre la modale
   useEffect(() => {
     if (game?.id && isOpen) {
+      // Aggiungiamo un timestamp per evitare la cache
+      const timestamp = new Date().getTime();
+      
       // Correggiamo la chiamata apiRequest rimuovendo il quarto parametro
-      apiRequest('GET', `/api/feltrinelli/games/${game.id}/rewards`)
+      apiRequest('GET', `/api/feltrinelli/games/${game.id}/rewards?_t=${timestamp}`)
         .then((data) => {
           console.log('Rewards data received:', data);
           // Verifica se data è un array
@@ -197,8 +206,30 @@ export default function GameRewardsModal({ isOpen, onClose, game }: GameRewardsM
         description: "Le associazioni dei premi sono state salvate con successo",
       });
       
-      // Invalida le query pertinenti - modificato per usare gli endpoint corretti
-      queryClient.invalidateQueries({ queryKey: ['/api/feltrinelli/games'] });
+      // Miglioramento dell'invalidazione delle query
+      // Invalida tutte le query pertinenti con un pattern più ampio
+      queryClient.invalidateQueries();
+      
+      // Forza il refetch dei dati specifici dopo un breve ritardo
+      setTimeout(async () => {
+        if (game?.id) {
+          // Forza il refetch dei premi del gioco
+          await queryClient.refetchQueries({ 
+            queryKey: [`/api/feltrinelli/games/${game.id}/rewards`],
+            exact: false 
+          });
+        }
+        // Forza il refetch di tutti i giochi
+        await queryClient.refetchQueries({ 
+          queryKey: ['/api/feltrinelli/games'],
+          exact: false 
+        });
+        // Forza il refetch di tutti i premi
+        await queryClient.refetchQueries({ 
+          queryKey: ['/api/feltrinelli/rewards'],
+          exact: false 
+        });
+      }, 200);
       
       onClose();
     },
