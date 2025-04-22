@@ -114,10 +114,22 @@ export class RewardGamesController {
           position: rg.position,
           leaderboardType: rg.leaderboard_type
         };
-      }).filter(Boolean); // Rimuove eventuali null
+      }).filter((item): item is NonNullable<typeof item> => item !== null); // Type guard to ensure non-null values
       
-      console.log('[RewardGamesController] Risposta formattata:', formattedRewards);
-      res.json(formattedRewards);
+      // Rimuovi duplicati basati sull'ID del premio
+      const uniqueRewards = Array.from(
+        new Map(formattedRewards.map(item => [item.id, item])).values()
+      );
+      
+      // In the getGameRewards method, after preparing the uniqueRewards
+      console.log('[RewardGamesController] Risposta formattata (dopo rimozione duplicati):', uniqueRewards);
+      
+      // Add cache control headers to prevent stale data
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      
+      res.json(uniqueRewards);
     } catch (error) {
       console.error('[RewardGamesController] Errore nel recupero dei premi per il gioco:', error);
       res.status(500).json({ 
