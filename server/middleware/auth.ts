@@ -1,11 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../services/authService';
+import jwt from 'jsonwebtoken';
 
-// Estendi l'interfaccia Request per includere l'utente
+// Estendi l'interfaccia Request per includere l'utente e il client
 declare global {
   namespace Express {
     interface Request {
       user?: any;
+      client?: any;
     }
   }
 }
@@ -83,4 +85,54 @@ export const clientMiddleware = () => {
     
     next();
   };
+};
+
+// Middleware per verificare l'autenticazione del client (server-to-server)
+export const verifyClientToken = (req: Request, res: Response, next: NextFunction) => {
+  console.log('[Auth Middleware] Verifica token client');
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log('[Auth Middleware] Token mancante o formato non valido');
+    return res.status(401).json({ error: 'Token di autenticazione mancante' });
+  }
+  
+  const token = authHeader.split(' ')[1];
+  console.log('[Auth Middleware] Token ricevuto', token.substring(0, 10) + '...');
+  
+  try {
+    let decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    
+    // Se decoded è una stringa, convertiamolo in oggetto
+    if (typeof decoded === 'string') {
+      try {
+        console.log('[Auth Middleware] Decoded è una stringa, tento la conversione in oggetto');
+        decoded = JSON.parse(decoded);
+      } catch (parseError) {
+        console.error('[Auth Middleware] Errore parsing token:', parseError);
+        return res.status(403).json({ error: 'Token non valido: formato non corretto' });
+      }
+    }
+    
+    console.log('[Auth Middleware] Token decodificato:', decoded);
+    
+    // Verifica che il token sia di tipo client
+    if (typeof decoded === 'object' && decoded !== null && 'type' in decoded) {
+      if (decoded.type !== 'client') {
+        console.log('[Auth Middleware] Token non di tipo client:', decoded.type);
+        return res.status(403).json({ error: 'Token non valido per l\'accesso client' });
+      }
+      
+      // Aggiungi le informazioni del client alla richiesta
+      req.client = decoded;
+      console.log('[Auth Middleware] Client autenticato:', req.client);
+      next();
+    } else {
+      console.log('[Auth Middleware] Token senza campo type');
+      return res.status(403).json({ error: 'Token non valido: formato non corretto' });
+    }
+  } catch (error) {
+    console.error('[Auth Middleware] Errore verifica token:', error);
+    return res.status(401).json({ error: 'Token non valido o scaduto' });
+  }
 };

@@ -307,6 +307,9 @@ export function configureRewardGamesRoutes(app: express.Express, prefix = '/api'
 // Funzione specializzata per Feltrinelli
 
 
+// Importa il middleware di autenticazione
+import { verifyClientToken } from '../middleware/auth';
+
 export function configureFeltrinelliRewardGamesRoutes(app: express.Express) {
   // Ottieni tutti i premi associati a un gioco
   app.get('/api/feltrinelli-legacy/games/:gameId/rewards', async (req, res) => {
@@ -404,6 +407,113 @@ export function configureFeltrinelliRewardGamesRoutes(app: express.Express) {
     } catch (error) {
       console.error('[API] Error fetching games for reward:', error);
       res.status(500).json({ error: 'Error fetching games for reward' });
+    }
+  });
+  
+  // Endpoint per il client per ottenere i premi configurati per un gioco specifico
+  app.get('/api/client/games/:gameId/rewards', verifyClientToken, async (req, res) => {
+    try {
+      const { gameId } = req.params;
+      const leaderboardType = req.query.leaderboardType as string || 'global'; // Default a global
+      
+      console.log(`[API Client Rewards] Recupero premi per gameId: ${gameId}, leaderboardType: ${leaderboardType}`);
+      
+      // Verifica che il client sia autenticato
+      if (!req.client || !req.client.clientId) {
+        console.error('[API Client Rewards] Client ID non trovato nella richiesta');
+        return res.status(401).json({ error: 'Client non autenticato correttamente' });
+      }
+      
+      // Verifica che il gioco esista e sia attivo
+      const gameResult = await db.execute(`
+        SELECT id, name FROM flt_games WHERE id = $1 AND is_active = true
+      `, [gameId]);
+      
+      if (gameResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Game not found or not active' });
+      }
+      
+      // Verifica le associazioni esistenti per questo gioco
+      const associationsCheck = await db.execute(`
+        SELECT COUNT(*) FROM reward_games 
+        WHERE game_id = $1::uuid AND leaderboard_type = $2
+      `, [gameId, leaderboardType]);
+      
+      console.log(`[API Client Rewards] Trovate ${associationsCheck.rows[0].count} associazioni per gameId=${gameId}, leaderboardType=${leaderboardType}`);
+      
+      // Recupera SOLO i premi ESPLICITAMENTE configurati per questo gioco e tipo di classifica
+      const result = await db.execute(`
+        SELECT r.*, rg.position, rg.id as association_id
+        FROM flt_rewards r
+        JOIN reward_games rg ON r.id = rg.reward_id
+        WHERE rg.game_id = $1::uuid
+          AND rg.leaderboard_type = $2
+          AND r.is_active = true
+        ORDER BY rg.position ASC
+      `, [gameId, leaderboardType]);
+      
+      // Log dettagliato per debug
+      console.log(`[API Client Rewards] Query ha trovato ${result.rows.length} premi`);
+      if (result.rows.length > 0) {
+        console.log(`[API Client Rewards] Premi trovati:`);
+        result.rows.forEach((r: any, i: number) => {
+          console.log(`  ${i+1}. ${r.name} (ID: ${r.id}, Pos: ${r.position}, Assoc ID: ${r.association_id})`);
+        });
+      }
+      
+      // Verifica se abbiamo trovato premi configurati
+      if (result.rows.length === 0) {
+        console.log(`[API Client Rewards] Nessun premio configurato per il gioco ${gameResult.rows[0].name} con leaderboardType=${leaderboardType}`);
+        return res.json({
+          data: [],
+          game: {
+            id: gameResult.rows[0].id,
+            name: gameResult.rows[0].name
+          },
+          leaderboardType
+        });
+      }
+      
+      // Formatta la risposta
+      const formattedRewards = result.rows.map((reward: any) => {
+        // Costruisci URL completo per le immagini se è presente un image_url
+        let imageUrl = reward.image_url;
+        if (imageUrl && !imageUrl.startsWith('http')) {
+          // Se l'immagine è su Supabase Storage, costruisci l'URL pubblico
+          const publicUrl = `https://hdguwqhxbqssdtqgilmy.supabase.co/storage/v1/object/public/uploads/${imageUrl}`;
+          imageUrl = publicUrl;
+        }
+        
+        return {
+          id: reward.id,
+          name: reward.name,
+          description: reward.description,
+          image_url: imageUrl,
+          points: reward.points,
+          type: reward.type,
+          value: reward.value,
+          position: reward.position,
+          icon: reward.icon,
+          color: reward.color
+        };
+      });
+      
+      console.log(`[API Client Rewards] Risposta formattata con ${formattedRewards.length} premi`);
+      
+      res.json({ 
+        data: formattedRewards,
+        game: {
+          id: gameResult.rows[0].id,
+          name: gameResult.rows[0].name
+        },
+        leaderboardType
+      });
+    } catch (error) {
+      console.error('[API Client Rewards] Errore durante il recupero dei premi:', error);
+      res.status(500).json({ 
+        error: 'Errore durante il recupero dei premi',
+        details: error instanceof Error ? error.message : 'Errore sconosciuto'
+      });
     }
   });
 }

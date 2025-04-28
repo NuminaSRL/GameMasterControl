@@ -60,6 +60,12 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               {!collapsed && <span className="ml-2">Premi</span>}
             </Link>
           </li>
+          <li className={`px-4 py-2 ${isActive('/leaderboards') ? 'bg-gray-700' : 'hover:bg-gray-700'}`}>
+            <Link href="/leaderboards" className="flex items-center">
+              <i className="fas fa-trophy"></i>
+              {!collapsed && <span className="ml-2">Classifiche</span>}
+            </Link>
+          </li>
           <li className={`px-4 py-2 ${isActive('/api-test') ? 'bg-gray-700' : 'hover:bg-gray-700'}`}>
             <Link href="/api-test" className="flex items-center">
               <i className="fas fa-code"></i>
@@ -77,3 +83,13 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     </div>
   );
 }
+
+// Aggiungi l'elemento per le classifiche nel menu
+const menuItems = [
+  { path: "/dashboard", label: "Dashboard", icon: "dashboard" },
+  { path: "/games", label: "Giochi", icon: "sports_esports" },
+  { path: "/badges", label: "Badge", icon: "military_tech" },
+  { path: "/rewards", label: "Premi", icon: "card_giftcard" },
+  { path: "/leaderboards", label: "Classifiche", icon: "leaderboard" }, // Nuovo elemento
+  // ... altri elementi del menu
+];

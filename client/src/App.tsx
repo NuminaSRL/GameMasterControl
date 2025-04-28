@@ -9,6 +9,7 @@ import Dashboard from "@/pages/Dashboard";
 import Games from "@/pages/Games";
 import Badges from "@/pages/Badges";
 import Rewards from "@/pages/Rewards";
+import Leaderboards from "@/pages/Leaderboards"; // Importiamo il nuovo componente
 import FeltrinelliApiTest from "@/pages/FeltrinelliApiTest";
 import FeltrinelliMapping from "@/pages/FeltrinelliMapping";
 import Sidebar from "@/components/layout/Sidebar";
@@ -46,6 +47,7 @@ function ProtectedAppContent() {
             <Route path="/games" component={Games} />
             <Route path="/badges" component={Badges} />
             <Route path="/rewards" component={Rewards} />
+            <Route path="/leaderboards" component={Leaderboards} /> {/* Aggiungiamo la nuova rotta */}
             <Route path="/api-test" component={FeltrinelliApiTest} />
             <Route path="/feltrinelli-mapping" component={FeltrinelliMapping} />
             <Route component={NotFound} />
@@ -91,6 +93,9 @@ function AppContent() {
         {isAuthenticated ? <ProtectedAppContent /> : <Login />}
       </Route>
       <Route path="/rewards">
+        {isAuthenticated ? <ProtectedAppContent /> : <Login />}
+      </Route>
+      <Route path="/leaderboards"> {/* Aggiungiamo la nuova rotta protetta */}
         {isAuthenticated ? <ProtectedAppContent /> : <Login />}
       </Route>
       <Route path="/api-test">

@@ -342,4 +342,102 @@ export class RewardGamesController {
       });
     }
   }
+
+  /**
+   * Recupera tutti i premi associati a un gioco per il client
+   */
+  async getClientGameRewards(req: Request, res: Response) {
+    try {
+      const { gameId } = req.params;
+      const leaderboardType = req.query.leaderboardType as string || 'global'; // Default a global
+      
+      console.log(`[RewardGamesController] Recupero premi per client, gameId: ${gameId}, leaderboardType: ${leaderboardType}`);
+      
+      // Verifica che il gioco esista e sia attivo
+      const { data: gameData, error: gameError } = await supabase
+        .from('flt_games')
+        .select('id, name')
+        .eq('id', gameId)
+        .eq('is_active', true)
+        .single();
+      
+      if (gameError || !gameData) {
+        console.error('[RewardGamesController] Gioco non trovato o non attivo:', gameError);
+        return res.status(404).json({ error: 'Game not found or not active' });
+      }
+      
+      // Recupera SOLO i premi ESPLICITAMENTE configurati per questo gioco e tipo di classifica
+      const { data: rewardsData, error: rewardsError } = await supabase
+        .from('reward_games')
+        .select(`
+          position,
+          flt_rewards!inner(
+            id, name, description, image_url, points, type, value, icon, color, is_active
+          )
+        `)
+        .eq('game_id', gameId)
+        .eq('leaderboard_type', leaderboardType)
+        .order('position', { ascending: true });
+      
+      if (rewardsError) {
+        console.error('[RewardGamesController] Errore recupero premi:', rewardsError);
+        throw rewardsError;
+      }
+      
+      console.log(`[RewardGamesController] Trovati ${rewardsData?.length || 0} premi per il gioco ${gameData.name}`);
+      
+      // Se non ci sono premi, restituisci un array vuoto
+      if (!rewardsData || rewardsData.length === 0) {
+        return res.json({
+          data: [],
+          game: {
+            id: gameData.id,
+            name: gameData.name
+          },
+          leaderboardType
+        });
+      }
+      
+      // Formatta la risposta
+      const formattedRewards = rewardsData.map((item: any) => {
+        const reward = item.flt_rewards;
+        
+        // Costruisci URL completo per le immagini se è presente un image_url
+        let imageUrl = reward.image_url;
+        if (imageUrl && !imageUrl.startsWith('http')) {
+          // Se l'immagine è su Supabase Storage, costruisci l'URL pubblico
+          const publicUrl = `https://hdguwqhxbqssdtqgilmy.supabase.co/storage/v1/object/public/uploads/${imageUrl}`;
+          imageUrl = publicUrl;
+        }
+        
+        return {
+          id: reward.id,
+          name: reward.name,
+          description: reward.description,
+          image_url: imageUrl,
+          points: reward.points,
+          type: reward.type,
+          value: reward.value,
+          position: item.position,
+          icon: reward.icon,
+          color: reward.color
+        };
+      });
+      
+      res.json({
+        data: formattedRewards,
+        game: {
+          id: gameData.id,
+          name: gameData.name
+        },
+        leaderboardType
+      });
+    } catch (error) {
+      console.error('[RewardGamesController] Errore durante il recupero dei premi:', error);
+      res.status(500).json({
+        error: 'Errore durante il recupero dei premi',
+        details: error instanceof Error ? error.message : 'Errore sconosciuto'
+      });
+    }
+  }
 }

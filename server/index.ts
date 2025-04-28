@@ -8,10 +8,17 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 // Modifica l'importazione
 import { configureUploadRoute } from './api/upload';
-import { configureRewardGamesRoutes } from './api/reward-games'; // Rimuovi configureFeltrinelliRewardGamesRoutes
+import { configureRewardGamesRoutes } from './api/reward-games'; 
+import { configureClientRewardsRoutes } from './api/client-rewards'; // Aggiungi questa importazione
 import debugRoutes from './routes/debug';
 // Importa il router Feltrinelli
 import feltrinelliRouter from './clients/feltrinelli/routes/index';
+import { configureLeaderboardRoutes } from './api/leaderboard';
+// Importa il router di autenticazione
+import authRouter from './api/auth';
+import gamesRouter from './api/games';
+// Importa il router per i premi dei giochi Feltrinelli
+import feltrinelliGameRewardRoutes from './clients/feltrinelli/routes/game-reward-routes';
 
 // Configurazione per ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -42,8 +49,15 @@ async function startServer() {
     app.use(express.json());
     app.use('/api/debug', debugRoutes);
     
+    // Monta il router di autenticazione
+    app.use('/api', authRouter);
+    app.use('/api', gamesRouter);
+    console.log('[Server] Router di autenticazione montato su /api');
+    
     // Configura la route di upload con Supabase
     configureUploadRoute(app);
+
+    configureLeaderboardRoutes(app);
     
     // Aggiungi questo blocco per configurare i file statici
     const uploadsPath = path.join(process.cwd(), 'public/uploads');
@@ -101,6 +115,21 @@ app._router.stack.forEach((middleware: any) => {
       return res.status(200).send('OK');
     });
     
+    // Aggiungiamo un endpoint di test per l'autenticazione
+    app.get('/api/auth-test-direct', (req, res) => {
+      console.log('[Auth Test] Endpoint chiamato direttamente da index.ts');
+      return res.json({ message: 'Auth test endpoint is working' });
+    });
+    
+    // Aggiungiamo un endpoint di test diretto per l'autenticazione
+    app.post('/api/direct-auth-test', (req, res) => {
+      console.log('[Direct Auth Test] Richiesta ricevuta:', req.body);
+      return res.json({ 
+        message: 'Direct auth test endpoint is working',
+        receivedData: req.body
+      });
+    });
+    
     console.log('[Server] Health check endpoint registrato');
     
     // Configura la route di upload
@@ -108,7 +137,12 @@ app._router.stack.forEach((middleware: any) => {
     
     // Configure reward-games routes
     configureRewardGamesRoutes(app);
-    // Rimuovi questa riga: configureFeltrinelliRewardGamesRoutes(app);
+    
+    // Configure client rewards routes (nuovo endpoint dedicato)
+    configureClientRewardsRoutes(app);
+    
+    // Aggiungi il router per i premi dei giochi Feltrinelli
+    app.use('/api', feltrinelliGameRewardRoutes);
     
     // Registra le route e ottieni il server HTTP
     console.log('[Server] Tentativo di registrare le route...');
@@ -133,5 +167,6 @@ console.log('[Server] Chiamata a startServer()');
 startServer();
 console.log('[Server] Chiamata a startServer() completata');
 
-// Remove this line as it's now inside the startServer function
+// Remove these lines as they're now inside the startServer function
 // app.use('/api/upload', uploadRouter);
+// app.use('/api', feltrinelliGameRewardRoutes);

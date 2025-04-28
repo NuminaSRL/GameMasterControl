@@ -12,6 +12,12 @@ router.get('/:gameId/rewards', (req, res) => {
   rewardGamesController.getGameRewards(req, res);
 });
 
+// Recupera i premi per un gioco (endpoint per il client)
+router.get('/client/:gameId/rewards', (req, res) => {
+  console.log('[GameRewardRoutes] Richiesta GET /client/:gameId/rewards ricevuta');
+  rewardGamesController.getClientGameRewards(req, res);
+});
+
 // Associa un premio a un gioco
 router.post('/:gameId/rewards/:rewardId', (req, res) => {
   console.log('[GameRewardRoutes] Richiesta POST /:gameId/rewards/:rewardId ricevuta');
